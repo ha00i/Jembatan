@@ -193,6 +193,25 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
 }
 @media(max-width:540px){.branch-search{max-width:none}.branch-toolbar{align-items:stretch}.branch-search{flex:1 1 100%}}
 
+
+/* Patch application warning: persistent, actionable and accessible. */
+.patch-toast{position:fixed;z-index:1200;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));width:min(440px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;background:var(--surface);color:var(--ink);border:1px solid #e8d5a9;border-left:5px solid var(--warning);border-radius:12px;box-shadow:0 18px 48px #13252d2e;padding:16px 18px}
+.patch-toast[hidden]{display:none!important}
+.patch-toast-top{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
+.patch-toast-heading{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:760;line-height:1.4}
+.patch-toast-mark{display:inline-flex;justify-content:center;align-items:center;flex:0 0 22px;width:22px;height:22px;border-radius:50%;background:var(--warning-soft);color:#83520b;font-weight:850}
+.patch-toast-close{width:30px;height:30px;min-width:30px;padding:4px;font-size:19px;line-height:1;border:0;background:transparent;color:var(--muted)}
+.patch-toast-close:hover{color:var(--ink)}
+.patch-toast-message{font-size:13px;line-height:1.55;color:var(--muted);margin:9px 0 13px;overflow-wrap:anywhere}
+.patch-toast details{font-size:12px;border-top:1px solid var(--line);padding-top:10px}
+.patch-toast summary{display:list-item;padding:0;background:none;cursor:pointer;font-size:12px;font-weight:700;list-style:disclosure-closed}
+.patch-toast details[open] summary{list-style:disclosure-open}
+.patch-toast pre{margin-top:9px;font-size:11px;line-height:1.5;max-height:150px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+.patch-toast-actions{margin-top:13px;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.patch-toast-actions button{font-size:12px;padding:8px 12px}
+@media(max-width:540px){.patch-toast{left:16px;right:16px;width:auto;bottom:max(12px,env(safe-area-inset-bottom));padding:14px}}
+@media(forced-colors:active){.patch-toast{border:2px solid CanvasText}.patch-toast-mark{border:1px solid CanvasText}}
+
 </style>
 </head>
 <body>
@@ -208,6 +227,15 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
 <main><header class="topbar"><div class="crumb"><strong>Workspace</strong><span>/</span>Operasi repository</div><div class="connect-note"><span class="mini-led" aria-hidden="true"></span>ChatGPT manual · Eksekusi GitHub lokal</div></header><section class="content"><div id="note" role="status" aria-live="polite"></div><div id="view"><div class="welcome"><span class="eyebrow">Mulai dari repository</span><h2>Satu kendali untuk setiap issue dan branch.</h2><p>Pilih repository di panel kiri. Jembatan akan membantu meninjau hubungan issue, commit, dan branch tanpa memerlukan API ChatGPT berbayar.</p><div class="steps"><div><span>01</span><strong>Sinkronkan repository</strong>Ambil branch dan issue dari GitHub.</div><div><span>02</span><strong>Kerjakan lewat ChatGPT</strong>Salin prompt, lalu tempel patch hasil analisis.</div><div><span>03</span><strong>Uji dan kirim PR</strong>Periksa hasil QA sebelum merge dan deploy.</div></div></div></div></section></main>
 <dialog class="confirm-dialog" id="branch-delete-dialog" aria-labelledby="branch-delete-title"><h2 id="branch-delete-title">Hapus branch dari GitHub?</h2><p id="branch-delete-description"></p><p id="branch-delete-proof"></p><label for="branch-delete-input">Ketik nama branch persis untuk konfirmasi</label><input id="branch-delete-input" autocomplete="off" spellcheck="false"><p class="modal-error" id="branch-delete-error" role="alert"></p><div class="confirm-actions"><button type="button" id="branch-delete-cancel">Batal</button><button type="button" id="branch-delete-confirm" class="danger-action" disabled>Hapus branch</button></div></dialog>
 </div>
+<aside class="patch-toast" id="patch-toast" role="alert" aria-labelledby="patch-toast-title" hidden>
+  <div class="patch-toast-top">
+    <div class="patch-toast-heading"><span class="patch-toast-mark" aria-hidden="true">!</span><span id="patch-toast-title">Patch gagal diterapkan</span></div>
+    <button type="button" class="patch-toast-close" id="patch-toast-close" aria-label="Tutup notifikasi">×</button>
+  </div>
+  <p class="patch-toast-message" id="patch-toast-message"></p>
+  <details id="patch-toast-details"><summary>Lihat detail error</summary><pre id="patch-toast-log"></pre></details>
+  <div class="patch-toast-actions"><button type="button" id="patch-toast-copy">Salin detail</button><button type="button" class="go" id="patch-toast-dismiss">Mengerti</button></div>
+</aside>
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -221,7 +249,47 @@ async function api(p,m='GET',b){
   if(!r.ok)throw new Error(j.error||r.statusText);return j;
 }
 const note=(t,bad)=>{const n=$('#note');n.textContent=t;n.className=bad?'bad':''};
-async function run(label,fn){note(label+'...');try{const r=await fn();note('');return r}catch(e){note(e.message,1)}}
+async function run(label,fn,onError){note(label+'...');try{const r=await fn();note('');return r}catch(e){note(e.message,1);if(onError)onError(e)}}
+
+let latestPatchError='';
+function showPatchError(error){
+  const message=String(error?.message||error||'Gagal menerapkan patch.');
+  latestPatchError=message;
+  const match=message.match(/error:\s*patch failed:\s*([^\r\n]+)/i);
+  $('#patch-toast-message').textContent=match
+    ? 'Kode pada '+match[1].trim()+' sudah berbeda. Buat ulang patch berdasarkan file terbaru dari repository.'
+    : 'Patch tidak cocok dengan kode saat ini. Periksa detail error lalu minta ChatGPT menyesuaikan patch.';
+  $('#patch-toast-log').textContent=message;
+  $('#patch-toast-details').open=false;
+  $('#patch-toast-copy').textContent='Salin detail';
+  $('#patch-toast').hidden=false;
+}
+function dismissPatchError(){
+  $('#patch-toast').hidden=true;
+  $('#patch-toast-details').open=false;
+}
+$('#patch-toast-close').onclick=dismissPatchError;
+$('#patch-toast-dismiss').onclick=dismissPatchError;
+$('#patch-toast-copy').onclick=async()=>{
+  if(!latestPatchError)return;
+  let copied=false;
+  try{
+    if(!navigator.clipboard?.writeText)throw new Error('Clipboard API tidak tersedia');
+    await navigator.clipboard.writeText(latestPatchError);
+    copied=true;
+  }catch(_){
+    const input=document.createElement('textarea');
+    input.value=latestPatchError;
+    input.setAttribute('aria-hidden','true');
+    input.style.position='fixed';input.style.opacity='0';
+    document.body.appendChild(input);
+    input.select();
+    try{copied=document.execCommand('copy')}catch(_){}
+    input.remove();
+  }
+  $('#patch-toast-copy').textContent=copied?'Detail disalin':'Salin manual dari detail';
+};
+
 function copy(el){el.select();try{navigator.clipboard.writeText(el.value)}catch(_){document.execCommand('copy')}}
 
 $('#login').onclick=()=>{tok=$('#tok').value.trim();if(!tok)return note('Masukkan token akses terlebih dahulu.',1);sessionStorage.setItem('jb-token',tok);loadRepos()};
@@ -411,7 +479,7 @@ $('#view').onclick=async e=>{
     if(r){q('[data-p]').hidden=false;const t=q('[data-prompt]');t.value=r.prompt;copy(t);note('Prompt siap ('+r.chars+' karakter) dan sudah disalin. Tempel ke ChatGPT.')}return;
   }
   if(act==='apply'){
-    const r=await run('Menerapkan patch dan menguji',()=>api('/api/apply','POST',{repo,issue:n,reply:q('[data-reply]').value,branch:S.applied[repo+'#'+n]}));
+    const r=await run('Menerapkan patch dan menguji',()=>api('/api/apply','POST',{repo,issue:n,reply:q('[data-reply]').value,branch:S.applied[repo+'#'+n]}),showPatchError);
     if(!r)return;S.applied[repo+'#'+n]=r.branch;S.open=n;
     const res=q('[data-res]');res.hidden=false;
     res.textContent='Branch '+r.branch+' (commit '+r.commit+')\n'+(r.test?(r.test.ok?'Test lolos.':'Test GAGAL.')+'\n'+r.test.output:'TEST_CMD belum diatur, jadi tidak ada test otomatis.');
