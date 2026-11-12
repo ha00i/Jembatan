@@ -212,7 +212,7 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ST={none:['Belum ada pekerjaan',1],ready:['Commit ditemukan · perlu validasi QA',2],merged_open:['Terindikasi di main · issue masih terbuka',3],done:['Issue ditutup · verifikasi QA terpisah',4]};
-let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},filter:'all',issueQuery:'',selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:''};
+let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},filter:'all',issueQuery:'',selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0};
 $('#tok').value=tok;
 
 async function api(p,m='GET',b){
@@ -245,7 +245,7 @@ function drawRepos(){
 $('#repos').onclick=e=>{const b=e.target.closest('[data-open]');if(b)openRepo(b.dataset.open)};
 
 async function openRepo(n){
-  S.repo=n;S.filter='all';S.issueQuery='';S.data=null;S.branchData=null;S.branchError=null;S.branchLoading=true;S.branchQuery='';S.branchFilter='all';if($('#branch-delete-dialog').open)$('#branch-delete-dialog').close();drawRepos();
+  S.repo=n;S.filter='all';S.issueQuery='';S.data=null;S.branchData=null;S.branchError=null;S.branchLoading=true;S.branchQuery='';S.branchFilter='all';S.branchRequestId++;if($('#branch-delete-dialog').open)$('#branch-delete-dialog').close();drawRepos();
   $('#view').innerHTML='<div class="welcome"><span class="eyebrow">Memuat repository</span><h2>Memeriksa issue dan branch...</h2><p>Data dibaca dari sinkronisasi lokal dan GitHub.</p></div>';
   const d=await run('Membaca branch dan issue',()=>api('/api/overview?repo='+encodeURIComponent(n)));
   if(d){S.data=d;drawMain();refreshBranches(n)}
@@ -299,8 +299,8 @@ function branchRows(rows){
     const safe=b.safe_to_delete===true;
     return '<div class="branch-grid-row">'+
       '<div class="branch-cell" data-label="Branch"><code>'+esc(b.name)+'</code><small>'+esc(b.sha.slice(0,9))+' · '+esc(b.date)+'</small></div>'+
-      '<div class="branch-cell branch-to" data-label="Sudah masuk ke">'+(targets||'<span class="mute">Belum ada bukti</span>')+'</div>'+
-      '<div class="branch-cell" data-label="Dibanding main"><strong>+'+Number(b.ahead)+' / −'+Number(b.behind)+'</strong><small>Di depan / tertinggal</small></div>'+
+      '<div class="branch-cell branch-to" data-label="Sudah masuk ke">'+(targets||(b.name===S.branchData?.base?'<span class="mute">Branch utama (acuan)</span>':'<span class="mute">Belum ada bukti</span>'))+'</div>'+
+      '<div class="branch-cell" data-label="Dibanding default"><strong>+'+Number(b.ahead)+' / −'+Number(b.behind)+'</strong><small>Di depan / tertinggal</small></div>'+
       '<div class="branch-cell branch-status" data-label="Keamanan"><span class="branch-badge '+esc(b.status)+'">'+esc(BRANCH_LABELS[b.status]||b.status)+'</span><small>'+esc(b.reason)+'</small></div>'+
       '<div class="branch-cell branch-controls" data-label="Tindakan">'+
       (safe?'<button class="danger-outline" data-act="branch-delete" data-branch="'+esc(b.name)+'">Hapus</button>':
@@ -339,17 +339,18 @@ function drawBranchPanel(){
     '<p class="branch-legend"><span id="branch-visible-count">'+branchFiltered().length+'</span> dari '+all.length+' branch · Safe berarti integrasi HEAD terverifikasi, bukan bukti QA atau deploy.</p>');
 }
 async function refreshBranches(repo){
+  const requestId=++S.branchRequestId;
   S.branchLoading=true;S.branchError=null;drawBranchPanel();
   try{
     const value=await api('/api/branches?repo='+encodeURIComponent(repo));
-    if(S.repo!==repo)return;
+    if(S.repo!==repo||S.branchRequestId!==requestId)return;
     if(!Array.isArray(value.branches))throw new Error('Respons daftar branch tidak valid');
     S.branchData=value;S.branchError=null;
   }catch(e){
-    if(S.repo!==repo)return;
+    if(S.repo!==repo||S.branchRequestId!==requestId)return;
     S.branchError=e.message;S.branchData=null;
   }finally{
-    if(S.repo===repo){S.branchLoading=false;drawBranchPanel()}
+    if(S.repo===repo&&S.branchRequestId===requestId){S.branchLoading=false;drawBranchPanel()}
   }
 }
 function openBranchDelete(repo, name){
