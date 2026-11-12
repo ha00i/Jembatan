@@ -339,8 +339,10 @@ def main(argv=None):
     if args.action == "status":
         print(json.dumps(progress(samples), ensure_ascii=False, indent=2))
         return 0
-    placeholders = {"nama-container-production", "nama_container_production", "container-name", "CONTAINER"}
-    if any(name.strip() in placeholders for name in args.critical):
+    placeholders = {"nama-container-production", "nama_container_production", "container-name", "container"}
+    if any(name.strip().lower() in placeholders or
+           name.strip().lower().startswith(("nama-container-", "nama_container_"))
+           for name in args.critical):
         parser.error("--critical masih berisi teks contoh. Jalankan subcommand 'containers' "
                      "untuk melihat nama sebenarnya, lalu ulangi --critical sesuai output.")
     output = analyze(samples, args.critical, max_gap=3 * 60)
