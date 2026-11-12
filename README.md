@@ -19,6 +19,10 @@ chat ChatGPT dan menempel balasannya kembali. Sisanya otomatis.
    STATUS / KEKURANGAN / PATCH.
 4. Tempel balasan, Terapkan dan uji. Patch masuk ke branch baru `bridge/issue-N-...`.
    Bila test gagal, ada prompt lanjutan untuk ditempel ke chat yang sama.
+   Jika patch tidak cocok dengan kode terbaru (misalnya `git apply gagal: patch failed: ...php:165`),
+   Jembatan akan menampilkan **notifikasi peringatan di pojok kanan bawah**. Notifikasi memuat
+   lokasi konflik, panel detail error, tombol **Salin detail** untuk dikirim ke ChatGPT,
+   serta tombol tutup. Notifikasi tetap tampil sampai pengguna menutupnya.
 5. Push dan buat PR. Setelah ditinjau, pakai perintah merge yang ditampilkan.
 6. Deploy dengan Docker menjalankan `docker compose up -d --build` dari branch utama.
 
