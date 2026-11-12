@@ -87,7 +87,7 @@ def gh_pages(path, limit=5):
 
 
 def repo_dir(r):
-    if not REPO_RE.match(r or ""):
+    if not isinstance(r, str) or not REPO_RE.fullmatch(r):
         raise Err("Nama repo tidak valid")
     return WORKDIR / r.replace("/", "__")
 
