@@ -184,3 +184,22 @@ def delete_remote(app, repo, branch, expected_sha):
         warning = "Branch terhapus di GitHub, tetapi cache lokal perlu disinkron ulang."
     return {"deleted": True, "name": branch, "sha": expected_sha,
             "merged_into": row["merged_into"], "warning": warning}
+
+
+
+def cleanup_remote(app, repo, confirm):
+    """Remove only verified merged remote branches; never remove default/active."""
+    if confirm != repo:
+        raise app.Err("Ketik nama repository persis untuk konfirmasi cleanup", 409)
+    snapshot = inventory(app, repo)
+    safe = [row for row in snapshot["branches"] if row["safe_to_delete"]]
+    deleted, skipped = [], []
+    for row in safe:
+        try:
+            result = delete_remote(app, repo, row["name"], row["sha"])
+            deleted.append(result["name"])
+        except app.Err as exc:
+            skipped.append({"name": row["name"], "reason": str(exc)})
+    return {"repo": repo, "deleted": deleted, "skipped": skipped,
+            "not_safe": [row["name"] for row in snapshot["branches"]
+                         if not row["safe_to_delete"]]}
