@@ -94,7 +94,13 @@ class BranchSafetyTests(unittest.TestCase):
         self.app = FakeBridge(self.tmp.name)
 
     def item(self):
-        return branch_manager.inventory(self.app, "owner/repo")["branches"][0]
+        return next(b for b in branch_manager.inventory(self.app, "owner/repo")["branches"] if b["name"] == "feature")
+
+    def test_main_is_visible_and_not_deletable(self):
+        rows = branch_manager.inventory(self.app, "owner/repo")["branches"]
+        main = next(x for x in rows if x["name"] == "main")
+        self.assertEqual(main["status"], "blocked")
+        self.assertFalse(main["safe_to_delete"])
 
     def test_exact_ancestry_in_main_is_safe(self):
         self.app.contains = ["main"]
