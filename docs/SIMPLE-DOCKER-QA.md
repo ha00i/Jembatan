@@ -79,3 +79,21 @@ python3 -m py_compile bridge.py branch_manager.py docker_control.py
 
 Sebelum mengaktifkan deploy: tes koneksi → cek daftar container QA → verifikasi pemisahan database → uji QA → simpan folder deploy app spesifik → konfirmasi manual.
 
+
+
+## UI activity feedback (November 2026)
+
+Dashboard sekarang menampilkan **activity card** saat QA/deploy sedang menunggu
+respons API: spinner, animasi bar tanpa persentase palsu, waktu berjalan, dan
+status proses. Setelah respons diterima, hasil perintah disimpan dalam state
+halaman dan bisa disalin. Notifikasi animasi memiliki kondisi success/error/
+warning/info serta tombol tutup. Layout dua kolom merespons menjadi satu kolom
+di layar lebih kecil; gerakan dinonaktifkan pada reduced-motion.
+
+**Batasan yang tetap berlaku:** QA Docker saat ini masih *synchronous* sampai
+maksimum 5 menit. Frontend **tidak** menampilkan log streaming, tidak tahu tahap
+tes individual, dan tidak punya kemampuan membatalkan proses di server.
+Animasi bar hanya menunjukkan permintaan masih berjalan. Jika halaman ditutup
+atau dimuat ulang, operasi backend tidak menjadi job yang dapat diikuti kembali.
+Untuk true progress diperlukan job ID, event/log streaming dan cancellation
+di backend dalam pengembangan berikutnya.
