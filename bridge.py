@@ -311,6 +311,8 @@ def docker_action(func, *args):
         raise Err(str(e), e.code) from e
 
 def deploy(r, confirm):
+    if qa_jobs.active():
+        raise Err("Deployment ditunda: QA masih berjalan. Tunggu hasil QA selesai.", 409)
     return docker_action(docker_control.deploy, r, confirm)
 
 def legacy_qa(r):
