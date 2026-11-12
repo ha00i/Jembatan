@@ -3,6 +3,7 @@
 import base64, hmac, json, os, re, shlex, subprocess, sys, tempfile, threading, time
 import branch_manager
 import docker_control
+import qa_jobs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib import error as urlerr, request as urlreq
@@ -312,6 +313,11 @@ def docker_action(func, *args):
 def deploy(r, confirm):
     return docker_action(docker_control.deploy, r, confirm)
 
+def legacy_qa(r):
+    if qa_jobs.active():
+        raise Err("QA lain masih berjalan; lihat log verbose sampai selesai", 409)
+    return docker_action(docker_control.run_qa, r)
+
 
 # ---------- HTTP ----------
 ROUTES = {
@@ -338,8 +344,11 @@ ROUTES = {
         docker_control.connection_test),
     ("GET", "/api/docker/containers"): lambda q, b: docker_action(
         docker_control.containers),
-    ("POST", "/api/docker/qa"): lambda q, b: docker_action(
-        docker_control.run_qa, b["repo"]),
+    ("POST", "/api/docker/qa"): lambda q, b: legacy_qa(b["repo"]),
+    ("POST", "/api/docker/qa/start"): lambda q, b: docker_action(
+        qa_jobs.start, b["repo"]),
+    ("GET", "/api/docker/qa/status"): lambda q, b: docker_action(
+        qa_jobs.status, q["repo"]),
     ("POST", "/api/deploy"): lambda q, b: deploy(b["repo"], b["confirm"]),
 }
 
