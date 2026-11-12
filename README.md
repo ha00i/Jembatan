@@ -76,6 +76,21 @@ python3 -m unittest discover -s tests -v
 python3 -m py_compile bridge.py docker_control.py qa_jobs.py
 ```
 
+### Branch deploy mengikuti yang tersedia di GitHub
+
+- Pilihan **main/staging** dibaca langsung dari repository GitHub yang dipilih.
+  Branch yang tidak ada tidak dapat disimpan sebagai target baru.
+- Jika sebelumnya tersimpan `staging` tetapi branch itu telah dihapus,
+  Jembatan menampilkan `staging (tidak ditemukan)`, alasan deploy terblokir,
+  dan opsi nyata yang ada di GitHub. Pilih target yang benar secara eksplisit,
+  lalu **Simpan aplikasi**. Tidak ada pengalihan otomatis ke main.
+- API `GET /api/deploy/branches?repo=owner/name` mengembalikan branch
+  main/staging yang tersedia, `default_branch` dan status pengaturan lama.
+  `GET /api/deploy/readiness` mengembalikan status tidak siap jika target
+  sudah hilang, tanpa menampilkan raw GitHub 404.
+- Jika repository tidak memiliki `main` maupun `staging`, deployment ditahan
+  karena belum ada target yang didukung.
+
 ### Deploy terkunci pada branch, SHA, dan QA
 
 - Pilih **main** atau **staging** di pengaturan aplikasi, kemudian **Simpan aplikasi**.
