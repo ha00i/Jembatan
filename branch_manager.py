@@ -81,7 +81,7 @@ def inventory(app, repo, refresh=True):
         if not SHA_RE.fullmatch(sha):
             continue
 
-        ahead, behind = map(int, app.git(
+        behind, ahead = map(int, app.git(
             d, "rev-list", "--left-right", "--count",
             f"origin/{base}...{ref}").split())
         # Each remote ref that contains HEAD proves Git commit ancestry.
