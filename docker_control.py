@@ -394,23 +394,22 @@ def deploy(app, repo, confirm, branch=None, expected_sha=None):
         _validate_connection(cfg["mode"], cfg["host"], cfg["username"], cfg["port"])
         import shlex
         q = shlex.quote
-        allowed = " ".join(q(origin) for origin in _repo_origin(repo))
         # No unreviewed shell command comes from the UI. Values are validated
         # repo, main/staging, SHA and quote-escaped mapped absolute directory.
         script = (
             "set -eu; cd -- " + q(path) + "; "
             "origin=$(git remote get-url origin); "
-            "case \\"$origin\\" in " +
+            "case \"$origin\" in " +
             "|".join(q(origin) + "|" + q(origin + ".git") for origin in sorted(_repo_origin(repo))).rstrip("|") +
             ") ;; *) echo 'Repository Git remote mismatch' >&2; exit 73 ;; esac; "
             "branch=$(git branch --show-current); "
-            "[ \\"$branch\\" = " + q(branch) + " ] || { echo 'Branch deploy tidak cocok' >&2; exit 74; }; "
-            "[ -z \\"$(git status --porcelain)\\" ] || { echo 'Folder deploy kotor' >&2; exit 75; }; "
+            "[ \"$branch\" = " + q(branch) + " ] || { echo 'Branch deploy tidak cocok' >&2; exit 74; }; "
+            "[ -z \"$(git status --porcelain)\" ] || { echo 'Folder deploy kotor' >&2; exit 75; }; "
             "git fetch --no-tags origin refs/heads/" + branch + "; "
-            "[ \\"$(git rev-parse --verify FETCH_HEAD)\\" = " + q(expected_sha) + " ] || "
+            "[ \"$(git rev-parse --verify FETCH_HEAD)\" = " + q(expected_sha) + " ] || "
             "{ echo 'Remote SHA berubah setelah QA' >&2; exit 76; }; "
             "git pull --ff-only origin " + branch + "; "
-            "[ \\"$(git rev-parse --verify HEAD)\\" = " + q(expected_sha) + " ] || "
+            "[ \"$(git rev-parse --verify HEAD)\" = " + q(expected_sha) + " ] || "
             "{ echo 'Pulled SHA tidak cocok' >&2; exit 77; }; "
             "docker compose up -d --build; "
             "printf '\\n--JEMBATAN-COMPOSE-PS--\\n'; "
