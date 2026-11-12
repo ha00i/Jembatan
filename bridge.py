@@ -16,7 +16,7 @@ HOST, PORT = os.environ.get("HOST", "0.0.0.0"), int(os.environ.get("PORT", "5111
 TEST_CMD = os.environ.get("TEST_CMD", "")
 DEPLOY_MAP = json.loads(os.environ.get("DEPLOY_MAP") or "{}")
 HERE = Path(__file__).resolve().parent
-REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+REPO_RE = re.compile(r"^(?!\.{1,2}/)[A-Za-z0-9_.-]+/(?!\.{1,2}$)[A-Za-z0-9_.-]+$")
 BRANCH_RE = re.compile(r"^[A-Za-z0-9_./-]+$")
 LOCK = threading.Lock()
 FAILS = {}  # ip -> (jumlah salah, waktu terakhir); 10 salah = diblokir 5 menit
