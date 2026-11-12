@@ -111,6 +111,70 @@ class SurveyTests(unittest.TestCase):
             if os.name != "nt":
                 self.assertEqual(file.stat().st_mode & 0o777, 0o600)
 
+    def test_progress_one_sample_explains_unfinished_survey(self):
+        result = s0.progress([sample(100)])
+        self.assertEqual(result["sample_count"], 1)
+        self.assertEqual(result["duration_hours"], 0)
+        self.assertEqual(result["remaining_hours"], 24)
+        self.assertFalse(result["qa_enabled"])
+
+    def test_progress_detects_sampling_gap(self):
+        result = s0.progress([sample(100), sample(400)])
+        self.assertTrue(result["has_sampling_gap"])
+        self.assertEqual(result["sample_count"], 2)
+
+    def test_resume_with_short_gap_preserves_previous_ticks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "s0.jsonl"
+            obj = sample(100)
+            obj["cpu_ticks"] = [333, 222]
+            obj["oom_kill_count"] = 1
+            s0._secure_append(path, obj)
+            with patch.object(s0.time, "time", return_value=120):
+                started, ticks, oom, count = s0.resume_state(path)
+            self.assertEqual((started, ticks, oom, count), (100, [333, 222], 1, 1))
+
+    def test_resume_rejects_gap_longer_than_three_minutes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "s0.jsonl"
+            s0._secure_append(path, sample(100))
+            with patch.object(s0.time, "time", return_value=100 + 181):
+                with self.assertRaisesRegex(ValueError, "lebih dari 3 menit"):
+                    s0.resume_state(path)
+
+    def test_report_rejects_placeholder_container_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "s0.jsonl"
+            s0._secure_append(path, sample(100))
+            with self.assertRaises(SystemExit) as ctx:
+                s0.main(["report", "--input", str(path), "--critical", "nama-container-production"])
+            self.assertEqual(ctx.exception.code, 2)
+
+    def test_interrupt_keeps_sample_and_returns_130(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "s0.jsonl"
+            obj = sample(100)
+            obj["sampled_at"] = "2026-11-12T00:00:00Z"
+            obj["cpu_ticks"] = None
+            obj["oom_kill_count"] = None
+            with patch.object(s0, "snapshot", return_value=obj):
+                with patch.object(s0.time, "sleep", side_effect=KeyboardInterrupt):
+                    code = s0.main(["collect", "--hours", "24", "--interval", "60", "--output", str(path)])
+            self.assertEqual(code, 130)
+            self.assertEqual(len(s0._read_samples(path)), 1)
+
+    def test_list_containers_uses_read_only_snapshot(self):
+        with patch.object(s0, "docker_snapshot", return_value={"readable": True, "containers": [
+            {"name": "app", "state": "running", "health": "healthy"}
+        ]}):
+            self.assertEqual(s0.main(["containers"]), 0)
+
+    def test_status_reads_existing_samples_without_authorizing_qa(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "s0.jsonl"
+            s0._secure_append(path, sample(100))
+            self.assertEqual(s0.main(["status", "--input", str(path)]), 0)
+
     def test_reject_invalid_jsonl(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "bad.jsonl"
