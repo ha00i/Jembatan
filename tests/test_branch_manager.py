@@ -2,7 +2,6 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
 
 import branch_manager
 
@@ -160,6 +159,17 @@ class BranchSafetyTests(unittest.TestCase):
         with self.assertRaises(FakeErr):
             branch_manager.delete_remote(self.app, "owner/repo", "feature", SHA_A)
         self.assertFalse(self.app.deleted)
+
+    def test_default_branch_cannot_be_deleted(self):
+        self.app.need_branch = lambda value: value
+        with self.assertRaises(FakeErr) as ctx:
+            branch_manager.delete_remote(self.app, "owner/repo", "main", SHA_B)
+        self.assertEqual(ctx.exception.code, 403)
+        self.assertFalse(self.app.deleted)
+
+    def test_closed_unmerged_pr_is_not_merge_evidence(self):
+        self.app.closed_prs = [pr(11, merged=False)]
+        self.assertEqual(self.item()["status"], "keep")
 
     def test_invalid_sha_is_rejected(self):
         with self.assertRaises(FakeErr):
