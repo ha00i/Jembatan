@@ -89,7 +89,7 @@ Bentuk error awal: `{ "error": { "code": "GUARD_WAIT", "message": "RAM tersedia 
 | SR-011 | QA FAIL menampilkan log ter-redact dan tombol buat prompt perbaikan (human copy/paste) |
 | SR-012 | Live stage/log update dengan reconnect, kondisi stale/offline, restart worker dan tidak ada PASS palsu |
 | SR-013 | Stop QA dan Emergency Stop hanya mengenai QA sandbox, tidak menyentuh production container/volumes |
-| SR-014 | PR/marge server-side check gating required checks + approval, default tanpa auto-merge |
+| SR-014 | PR/merge server-side check gating required checks + approval, default tanpa auto-merge |
 | SR-015 | Deploy production memerlukan approval berbeda, allowlist, healthchecks dan rollback plan; tidak dijalankan oleh QA worker |
 | SR-016 | UI 360px/768px/1280px, keyboard focus, readable status labels, error/empty/loading/offline state diuji browser nyata |
 | SR-017 | Disk quota benar-benar berlaku atau resource disk status dianggap unavailable; cleanup tidak pernah `docker system prune` host |
