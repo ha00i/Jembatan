@@ -81,19 +81,34 @@ Sebelum mengaktifkan deploy: tes koneksi → cek daftar container QA → verifik
 
 
 
-## UI activity feedback (November 2026)
+## QA verbose: log aktual saat Docker menjalankan tes
 
-Dashboard sekarang menampilkan **activity card** saat QA/deploy sedang menunggu
-respons API: spinner, animasi bar tanpa persentase palsu, waktu berjalan, dan
-status proses. Setelah respons diterima, hasil perintah disimpan dalam state
-halaman dan bisa disalin. Notifikasi animasi memiliki kondisi success/error/
-warning/info serta tombol tutup. Layout dua kolom merespons menjadi satu kolom
-di layar lebih kecil; gerakan dinonaktifkan pada reduced-motion.
+UI QA sekarang menampilkan progres yang **bisa dipertanggungjawabkan**:
+waktu berjalan, tahap validasi container, profil tes, dan potongan stdout/stderr
+dari proses `docker exec` yang sedang berlangsung. Backend memulai job melalui
+`POST /api/docker/qa/start` dan dashboard polling
+`GET /api/docker/qa/status?repo=...` tiap sekitar 1,2 detik.
 
-**Batasan yang tetap berlaku:** QA Docker saat ini masih *synchronous* sampai
-maksimum 5 menit. Frontend **tidak** menampilkan log streaming, tidak tahu tahap
-tes individual, dan tidak punya kemampuan membatalkan proses di server.
-Animasi bar hanya menunjukkan permintaan masih berjalan. Jika halaman ditutup
-atau dimuat ulang, operasi backend tidak menjadi job yang dapat diikuti kembali.
-Untuk true progress diperlukan job ID, event/log streaming dan cancellation
-di backend dalam pengembangan berikutnya.
+- Status: `queued` → `running` → `passed` atau `failed`.
+- Log update tersedia selama pengujian (bukan setelah semua selesai);
+  ditampilkan pada terminal scrollable. Log dibatasi 64 KB terakhir.
+- Tombol salin log bisa digunakan sebelum pekerjaan selesai.
+- Satu job QA aktif maksimum pada instance backend ini (tidak hanya satu tab).
+- Browser reload: status diambil lagi dari memory server ketika repo dipilih.
+- Restart Jembatan: **job state hilang** dan monitoring job tidak bisa disambung.
+- Pelindung: preset tes tetap, inspeksi container QA dan larangan privileged/
+  host-network yang sudah ada; tidak menjalankan kode di container production.
+- Log output disamarkan untuk token admin/GitHub Jembatan yang diketahui; teks
+  aplikasi lain yang sensitif tetap harus dihindari pada output pengujian.
+
+**Batasan:** Tidak ada persentase penyelesaian tes yang terukur, streaming saat
+proses di container menahan flush juga tidak dapat dipaksakan, tidak ada cancel
+job atau queue persisted, dan belum ada bukti bahwa container menguji commit
+SHA GitHub terbaru. Live log tidak berarti QA environment sudah terisolasi dari
+database/volume production—operator wajib memeriksanya dahulu.
+
+Untuk meninjau fungsi yang baru ditambahkan jalankan:
+```bash
+python3 -m unittest discover -s tests -p "test_qa_verbose_jobs.py" -v
+python3 -m unittest discover -s tests -p "test_docker_ui_activity_contract.py" -v
+```
