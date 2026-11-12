@@ -9,6 +9,9 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+import selectors
+import signal
+import time
 
 QA_PROFILES = {
     "laravel": ("Laravel (php artisan test)", ["php", "artisan", "test", "--no-ansi"]),
@@ -158,23 +161,56 @@ def _docker_base(app):
 
 
 def _command(args, timeout=20, cwd=None):
+    """Bound memory for subprocess output and kill the whole QA process group on timeout."""
     env = {k: v for k, v in os.environ.items()
            if k not in ("DOCKER_HOST", "DOCKER_CONTEXT", "GITHUB_TOKEN", "ADMIN_TOKEN", "TEST_CMD")}
     env["GIT_TERMINAL_PROMPT"] = "0"
+    process = None
+    output = b""
+    deadline = time.monotonic() + timeout
     try:
-        p = subprocess.run(args, capture_output=True, text=True, timeout=timeout,
-                           cwd=cwd, env=env, check=False)
+        process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                   cwd=cwd, env=env, start_new_session=True)
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            while selector.get_map():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(args, timeout)
+                ready = selector.select(remaining)
+                if not ready:
+                    raise subprocess.TimeoutExpired(args, timeout)
+                for key, _ in ready:
+                    chunk = os.read(key.fileobj.fileno(), 16384)
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                    else:
+                        output = (output + chunk)[-65536:]
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(args, timeout)
+        code = process.wait(timeout=remaining)
     except subprocess.TimeoutExpired:
+        if process is not None and process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
         raise DockerError("Operasi Docker melewati batas waktu", 504)
     except OSError as e:
+        if process is not None and process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
         raise DockerError(f"Perintah Docker tidak tersedia: {type(e).__name__}", 503)
-    out = (p.stdout + p.stderr).strip()
-    if p.returncode:
-        # no SSH command/credentials or raw subprocess arguments in response
-        if p.returncode == 255:
+    except BaseException:
+        if process is not None and process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+        raise
+    out = output.decode("utf-8", errors="replace").strip()
+    if code:
+        if code == 255:
             raise DockerError("Koneksi SSH gagal. Periksa username, SSH key dan known_hosts.", 502)
         raise DockerError("Docker gagal: " + out[-1000:], 502)
-    return p.stdout.strip()
+    return out
 
 
 def _docker(app, *args, timeout=20, cwd=None):
