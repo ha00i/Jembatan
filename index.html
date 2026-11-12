@@ -182,6 +182,10 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
 .confirm-dialog .danger-action:hover{background:#7d322c;color:#fff}
 .confirm-dialog .danger-action:disabled{opacity:.45}
 .confirm-dialog .modal-error{color:#a33a31;font-weight:650}
+.confirm-dialog .branch-delete-list{white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto;padding:11px 13px;font:12px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--code);border:1px solid var(--line);border-radius:9px;margin:0 0 14px}
+.confirm-dialog .branch-delete-list[hidden]{display:none}
+.confirm-dialog .confirm-actions button{min-height:44px;min-width:95px}
+.confirm-dialog button:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
 @media(max-width:1200px){.branch-grid-head,.branch-grid-row{grid-template-columns:minmax(140px,1fr) minmax(135px,1fr) 90px minmax(160px,1.2fr) auto;gap:11px}}
 @media(max-width:1050px){
  .branch-grid-head{display:none}
@@ -302,7 +306,7 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
 </nav>
 <div id="docker-view" hidden></div>
 <div id="view"><div class="welcome"><span class="eyebrow">Mulai dari repository</span><h2>Satu kendali untuk setiap issue dan branch.</h2><p>Pilih repository di panel kiri. Jembatan akan membantu meninjau hubungan issue, commit, dan branch tanpa memerlukan API ChatGPT berbayar.</p><div class="steps"><div><span>01</span><strong>Sinkronkan repository</strong>Ambil branch dan issue dari GitHub.</div><div><span>02</span><strong>Kerjakan lewat ChatGPT</strong>Salin prompt, lalu tempel patch hasil analisis.</div><div><span>03</span><strong>Uji dan kirim PR</strong>Periksa hasil QA sebelum merge dan deploy.</div></div></div></div></section></main>
-<dialog class="confirm-dialog" id="branch-delete-dialog" aria-labelledby="branch-delete-title"><h2 id="branch-delete-title">Hapus branch dari GitHub?</h2><p id="branch-delete-description"></p><p id="branch-delete-proof"></p><label for="branch-delete-input">Ketik nama branch persis untuk konfirmasi</label><input id="branch-delete-input" autocomplete="off" spellcheck="false"><p class="modal-error" id="branch-delete-error" role="alert"></p><div class="confirm-actions"><button type="button" id="branch-delete-cancel">Batal</button><button type="button" id="branch-delete-confirm" class="danger-action" disabled>Hapus branch</button></div></dialog>
+<dialog class="confirm-dialog" id="branch-delete-dialog" aria-labelledby="branch-delete-title" aria-describedby="branch-delete-description"><h2 id="branch-delete-title">Hapus branch dari GitHub?</h2><p id="branch-delete-description"></p><p id="branch-delete-proof"></p><pre class="branch-delete-list" id="branch-delete-list" hidden></pre><p class="modal-error" id="branch-delete-error" role="alert"></p><div class="confirm-actions"><button type="button" id="branch-delete-cancel">Batal</button><button type="button" id="branch-delete-confirm" class="danger-action">Hapus</button></div></dialog>
 </div>
 <div class="toast-stack" id="toast-stack" aria-label="Notifikasi aktivitas" aria-live="polite" aria-relevant="additions"></div>
 <div class="patch-toast" id="patch-toast" role="alert" aria-labelledby="patch-toast-title" hidden>
@@ -527,37 +531,77 @@ async function refreshBranches(repo){
 function openBranchDelete(repo, name){
   const row=S.branchData?.branches.find(b=>b.name===name);
   if(!row?.safe_to_delete)return note('Branch belum memenuhi syarat penghapusan.',true);
-  pendingBranchDelete={repo,branch:name,sha:row.sha};
+  pendingBranchDelete={kind:'single',repo,branch:name,sha:row.sha};
+  $('#branch-delete-title').textContent='Hapus branch dari GitHub?';
   $('#branch-delete-description').textContent='Repository: '+repo+' · Branch: '+name+
-    '. Tindakan ini menghapus branch remote GitHub, bukan branch utama.';
+    '. Penghapusan ini hanya untuk branch remote yang sudah terbukti merged.';
   $('#branch-delete-proof').textContent='Bukti: '+row.reason;
-  $('#branch-delete-input').value='';
+  $('#branch-delete-list').hidden=true;
   $('#branch-delete-error').textContent='';
-  $('#branch-delete-confirm').disabled=true;
+  $('#branch-delete-confirm').disabled=false;
+  $('#branch-delete-confirm').textContent='Hapus';
   $('#branch-delete-dialog').showModal();
-  $('#branch-delete-input').focus();
+  $('#branch-delete-cancel').focus();
 }
-$('#branch-delete-input').oninput=()=>{
-  $('#branch-delete-confirm').disabled= !pendingBranchDelete ||
-    $('#branch-delete-input').value!==pendingBranchDelete.branch;
+function openBranchCleanup(repo){
+  const safe=(S.branchData?.branches||[]).filter(x=>x.safe_to_delete);
+  if(!safe.length)return note('Tidak ada branch yang terverifikasi aman dihapus.',true);
+  pendingBranchDelete={kind:'bulk',repo,branches:safe.map(x=>({name:x.name,sha:x.sha}))};
+  $('#branch-delete-title').textContent='Hapus '+safe.length+' branch yang aman?';
+  $('#branch-delete-description').textContent='Repository: '+repo+
+    '. Hanya branch yang telah terbukti merged yang boleh dihapus. Branch utama dan branch aktif tetap dilindungi.';
+  $('#branch-delete-proof').textContent='Jembatan akan memeriksa ulang status merge, proteksi, dan SHA pada server.';
+  const list=$('#branch-delete-list');
+  list.textContent=safe.map(x=>x.name).join('\n');
+  list.hidden=false;
+  $('#branch-delete-error').textContent='';
+  $('#branch-delete-confirm').disabled=false;
+  $('#branch-delete-confirm').textContent='Hapus';
+  $('#branch-delete-dialog').showModal();
+  $('#branch-delete-cancel').focus();
+}
+let branchDeleteBusy=false;
+$('#branch-delete-dialog').oncancel=e=>{if(branchDeleteBusy)e.preventDefault()};
+$('#branch-delete-cancel').onclick=()=>{
+  if(!branchDeleteBusy)$('#branch-delete-dialog').close();
 };
-$('#branch-delete-cancel').onclick=()=>$('#branch-delete-dialog').close();
-$('#branch-delete-dialog').onclose=()=>{pendingBranchDelete=null;$('#branch-delete-error').textContent='';};
+$('#branch-delete-dialog').onclose=()=>{
+  pendingBranchDelete=null;
+  $('#branch-delete-error').textContent='';
+};
 $('#branch-delete-confirm').onclick=async()=>{
   const p=pendingBranchDelete,btn=$('#branch-delete-confirm');
-  if(!p||S.repo!==p.repo||$('#branch-delete-input').value!==p.branch)return;
-  btn.disabled=true;$('#branch-delete-cancel').disabled=true;
+  if(!p||branchDeleteBusy||S.repo!==p.repo)return;
+  branchDeleteBusy=true;
+  btn.disabled=true;
+  btn.textContent='Menghapus...';
+  $('#branch-delete-cancel').disabled=true;
   try{
-    const result=await api('/api/branches/delete','POST',{repo:p.repo,branch:p.branch,sha:p.sha});
-    $('#branch-delete-dialog').close();
-    await refreshBranches(p.repo);
-    note('Branch '+p.branch+' dihapus dari GitHub.'+(result.warning?' '+result.warning:''));
+    if(p.kind==='bulk'){
+      // Confirmation is the explicit Hapus click; never ask the operator to type.
+      // Server still re-checks every branch before deleting it.
+      const result=await api('/api/branches/cleanup','POST',{repo:p.repo,confirm:p.repo});
+      $('#branch-delete-dialog').close();
+      await refreshBranches(p.repo);
+      const skipped=result.skipped||[];
+      notify('Terhapus: '+(result.deleted||[]).length+' branch'+
+        (skipped.length?'; '+skipped.length+' dilewati karena tidak aman atau berubah.':''),
+        skipped.length?'warning':'success','Pembersihan branch');
+    }else if(p.kind==='single'){
+      const result=await api('/api/branches/delete','POST',
+        {repo:p.repo,branch:p.branch,sha:p.sha});
+      $('#branch-delete-dialog').close();
+      await refreshBranches(p.repo);
+      notify('Branch '+p.branch+' dihapus.'+(result.warning?' '+result.warning:''),
+        'success','Branch dihapus');
+    }
   }catch(e){
     $('#branch-delete-error').textContent=e.message;
   }finally{
+    branchDeleteBusy=false;
     $('#branch-delete-cancel').disabled=false;
-    btn.disabled= !pendingBranchDelete ||
-      $('#branch-delete-input').value!==pendingBranchDelete.branch;
+    btn.disabled=false;
+    btn.textContent='Hapus';
   }
 };
 
@@ -568,16 +612,7 @@ $('#view').onclick=async e=>{
   const b=e.target.closest('[data-act]');if(!b)return;
   const act=b.dataset.act,box=b.closest('details'),n=box&&+box.dataset.n,q=s=>box.querySelector(s),repo=S.repo;
   if(act==='branches-refresh')return refreshBranches(repo);
-  if(act==='branches-cleanup'){
-    const safe=(S.branchData?.branches||[]).filter(x=>x.safe_to_delete);
-    if(!safe.length)return note('Tidak ada branch yang terverifikasi aman dihapus.',1);
-    const names=safe.map(x=>x.name).join('\n');
-    const typed=prompt('Hapus '+safe.length+' branch yang sudah terbukti merged?\n'+names+'\n\nKetik nama repository persis: '+repo);
-    if(typed!==repo)return note('Cleanup dibatalkan.',1);
-    const r=await run('Menghapus branch aman',()=>api('/api/branches/cleanup','POST',{repo,confirm:typed}));
-    if(r){note('Terhapus: '+(r.deleted.join(', ')||'tidak ada')+(r.skipped.length?'\nDilewati: '+r.skipped.map(x=>x.name).join(', '):''));refreshBranches(repo);}
-    return;
-  }
+  if(act==='branches-cleanup')return openBranchCleanup(repo);
   if(act==='branch-delete')return openBranchDelete(repo,b.dataset.branch);
   if(act==='reload')return openRepo(repo);
   if(act==='open-docker')return $('#nav-docker').click();
