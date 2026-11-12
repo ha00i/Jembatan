@@ -28,6 +28,31 @@ class DockerControlTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.app = StubApp(self.tmp.name)
 
+    def test_repository_dot_segments_are_not_valid_names(self):
+        bad = ("../another-repo", "./another-repo", "owner/..",
+               "owner/.", "owner/repo/../other", "owner//repo")
+        for repo in bad:
+            with self.subTest(repo=repo):
+                self.assertFalse(ctl.REPO_RE.fullmatch(repo))
+        # GitHub supports a dedicated '.github' repository name;
+        # reject only the exact dot/dotdot path segments, not all dots.
+        self.assertIsNotNone(ctl.REPO_RE.fullmatch("example/.github"))
+        self.assertIsNotNone(ctl.REPO_RE.fullmatch("ha00i/Jembatan"))
+
+    def test_subprocess_closes_stdout_after_success_and_timeout(self):
+        import gc
+        import warnings
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always", ResourceWarning)
+            result = ctl._command([sys.executable, "-c", "print('OK')"], timeout=3)
+            self.assertEqual(result, "OK")
+            with self.assertRaises(ctl.DockerError):
+                ctl._command([sys.executable, "-c", "import time;time.sleep(5)"], timeout=0.05)
+            gc.collect()
+        leaked = [str(item.message) for item in captured
+                  if issubclass(item.category, ResourceWarning) and "unclosed file" in str(item.message)]
+        self.assertEqual(leaked, [])
+
     def test_subprocess_output_is_memory_bounded(self):
         output = ctl._command([sys.executable, "-c", "print('x' * 100000)"], timeout=5)
         self.assertLessEqual(len(output), 65536)
