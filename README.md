@@ -34,7 +34,7 @@ Pada Docker & QA kamu bisa:
 - Klik **Simpan koneksi**, **Tes koneksi**, **Lihat container**.
 - Pilih repository, mapping **container QA** + **profil tes tetap** + **path Compose** aplikasi; klik **Run QA** atau **Deploy** setelah konfirmasi.
 - QA tidak boleh memakai container production; backend hanya menerima container yang namanya menunjukkan QA, running, non-privileged, dan bukan host-network. Pastikan database/volume juga memang terpisah.
-- Deployment hanya pada path mapping yang telah disetujui, bukan semua repo atau branch.
+- Deployment hanya pada path mapping dan branch target (main/staging) yang telah disetujui.
 - **Satu issue → satu branch tetap** `bridge/issue-N`, PR terbuka dipakai kembali, issue closed tersembunyi kecuali dibuka.
 - Untuk branch lama yang sudah merged: tombol **Hapus semua branch aman** dengan konfirmasi nama repository dan verifikasi SHA ulang.
 
@@ -75,6 +75,29 @@ Pengujian:
 python3 -m unittest discover -s tests -v
 python3 -m py_compile bridge.py docker_control.py qa_jobs.py
 ```
+
+### Deploy terkunci pada branch, SHA, dan QA
+
+- Pilih **main** atau **staging** di pengaturan aplikasi, kemudian **Simpan aplikasi**.
+- Jalankan QA pada **checkout Git yang sesuai branch target** di container QA.
+  Jembatan memeriksa `git rev-parse HEAD` serta perubahan tracked files sebelum
+  dan sesudah tes, lalu mencocokkannya dengan SHA GitHub branch target.
+- QA bisa **PASS tetapi SHA belum terverifikasi** jika container tidak memiliki
+  Git checkout, sumbernya kotor, atau commitnya berbeda. Status tersebut tidak
+  mengizinkan deploy.
+- Tombol **Periksa kesiapan** menampilkan branch, SHA dan alasan kelayakan.
+  Deploy ditolak pada backend bila SHA terbaru dan bukti QA tidak cocok.
+- Untuk local Docker: verifikasi folder mapping Git, branch aktif, kebersihan
+  checkout; `git fetch`, `git pull --ff-only origin <branch>`, cek HEAD
+  hasil pull **persis sama SHA yang lulus QA**, lalu `docker compose up -d --build`.
+  Mode SSH melakukan pemeriksaan ekuivalen pada host remote.
+- Setelah build, hasil `docker compose ps --format json` dipakai untuk menilai
+  healthcheck. Tanpa healthcheck terpasang, tampil **belum terverifikasi**,
+  bukan klaim healthy. Jika service unhealthy, hasil deploy dianggap gagal.
+- Belum ada rollback otomatis; persetujuan deploy selalu manual. Bukti QA
+  disimpan **di memori Jembatan**, sehingga restart backend menghilangkan
+  eligibility dan perlu menjalankan QA lagi. Status ini bukan bukti kriptografis
+  bahwa semua runtime mounted volumes sesuai commit.
 
 ## Manajemen branch (fitur baru)
 
@@ -178,8 +201,8 @@ Tidak ada perubahan ke Docker production melalui dokumen ini.
 **ChatGPT tetap manual tanpa API berbayar.** Jembatan adalah orchestrator pekerjaan GitHub lokal, bukan klien API model. Pembuatan solusi memakai prompt/balasan yang disalin-tempel. Semua tindakan otomatis selain itu harus memiliki kebijakan dan bukti yang tercatat.
 
 - **Hari ini (sudah ada):** sinkron repository, deteksi issue/branch secara heuristik, prompt, tempel patch, uji opsional, push branch, buat PR, salin perintah merge, deploy Docker atas permintaan. Dashboard kini menampilkan status dengan istilah yang tidak menyamakan commit dengan kelulusan QA.
-- **Target tahap berikutnya (belum tersedia):** pelacakan workflow persisten per issue dan commit SHA; QA wajib dan terisolasi; pemeriksaan status CI GitHub; auto-merge hanya jika semua gerbang lulus; deploy berbasis allowlist, healthcheck dan rollback; audit log progres realtime.
-- **Perhatian:** tombol deploy saat ini menjalankan `docker compose up -d --build` setelah konfirmasi. Itu bukan CD pipeline bergate, tidak otomatis rollback. Jangan aktifkan pada repo tidak tepercaya.
+- **Target tahap berikutnya (belum tersedia):** pelacakan workflow persisten per issue dan commit SHA; QA wajib dan terisolasi; pemeriksaan status CI GitHub; auto-merge hanya jika semua gerbang lulus; deploy berbasis allowlist dengan rollback; audit log progres realtime.
+- **Perhatian:** tombol deploy kini memerlukan bukti QA untuk SHA target, lalu menjalankan `docker compose up -d --build`. Itu belum CD pipeline lengkap dan tidak otomatis rollback. Jangan aktifkan pada repo tidak tepercaya.
 
 Lihat [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md) untuk state machine dan gerbang penerimaan serta [docs/UI-DESIGN.md](docs/UI-DESIGN.md) untuk arah UX dan verifikasi visual.
 
