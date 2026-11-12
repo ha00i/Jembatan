@@ -76,9 +76,16 @@ def inventory(app, repo, refresh=True):
         if not ref.startswith("origin/") or ref == "origin/HEAD":
             continue
         branch = ref[len("origin/"):]
-        if branch == base:
-            continue
         if not SHA_RE.fullmatch(sha):
+            continue
+        if branch == base:
+            records.append({
+                "name": branch, "sha": sha, "date": date,
+                "ahead": 0, "behind": 0, "merged_into": [],
+                "open_prs": [], "protected": True, "status": "blocked",
+                "safe_to_delete": False,
+                "reason": "Branch utama GitHub; tidak boleh dihapus."
+            })
             continue
 
         behind, ahead = map(int, app.git(
