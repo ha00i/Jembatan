@@ -213,22 +213,70 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
 @media(forced-colors:active){.patch-toast{border:2px solid CanvasText}.patch-toast-mark{border:1px solid CanvasText}}
 
 
-.simple-nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}
+.simple-nav{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 24px}
+.simple-nav button{min-height:43px;transition:background .18s ease,border-color .18s ease,transform .18s ease}
 .simple-nav button[aria-pressed=true]{color:var(--accent);background:var(--accent-soft);border-color:#a2ccc4}
-.docker-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
-.docker-panel{border:1px solid var(--line);background:var(--surface);padding:21px;border-radius:12px;min-width:0}
-.docker-panel h3{margin:0 0 7px;font-size:18px}
-.docker-panel p{margin:0 0 16px;color:var(--muted);font-size:13px}
-.docker-panel label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 5px}
-.docker-panel input,.docker-panel select{width:100%}
-.docker-panel .row{margin-top:14px}
+.docker-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+.docker-panel{border:1px solid var(--line);background:var(--surface);padding:clamp(18px,2.3vw,26px);border-radius:14px;min-width:0;box-shadow:0 4px 16px #13252d07}
+.docker-panel h3{margin:0 0 9px;font-size:18px;letter-spacing:-.02em;line-height:1.3}
+.docker-panel p{margin:0 0 18px;color:var(--muted);font-size:13px;line-height:1.6}
+.docker-panel label{display:block;font-size:12px;font-weight:750;color:var(--muted);margin:17px 0 7px}
+.docker-panel input,.docker-panel select{display:block;width:100%;min-height:43px}
+.docker-panel .row{margin-top:21px;gap:10px;align-items:stretch}
+.docker-panel .row button{min-height:43px;flex:1 1 116px}
+.docker-panel .docker-ssh-fields{padding:1px 0 0}
 .docker-wide{grid-column:1/-1}
-.docker-containers{display:flex;flex-wrap:wrap;gap:7px;max-height:185px;overflow:auto}
-.docker-containers button{font-size:12px;font-weight:500;text-align:left}
-.docker-out{white-space:pre-wrap;overflow:auto;max-height:300px;font-size:12px;background:var(--code);border-radius:8px;padding:12px}
-.docker-caption{font-size:12px;color:var(--muted);margin-top:8px}
+.docker-containers{display:flex;flex-wrap:wrap;gap:9px;max-height:220px;overflow:auto;padding:2px 0}
+.docker-containers button{font-size:12px;font-weight:600;text-align:left;min-height:37px;max-width:100%;overflow-wrap:anywhere;transition:background .2s ease,transform .2s ease}
+.docker-containers button:hover{background:var(--accent-soft);transform:translateY(-1px)}
+.docker-out{white-space:pre-wrap;overflow:auto;max-height:340px;font-size:12px;line-height:1.65;background:var(--code);border-radius:10px;padding:16px;margin-top:18px}
+.docker-caption{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.6}
+.docker-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.docker-section-heading h3{margin:0}
+.docker-section-heading button{font-size:12px}
 .docker-ssh-fields[hidden],#docker-view[hidden],#view[hidden]{display:none!important}
-@media(max-width:820px){.docker-grid{grid-template-columns:1fr}}
+.docker-activity{grid-column:1/-1;border:1px solid #abd6cc;border-radius:14px;background:linear-gradient(118deg,#f7fdfb 0%,var(--surface) 72%);padding:clamp(18px,2.3vw,24px);box-shadow:0 12px 30px #12352d0a}
+.docker-activity.error{border-color:#ecc3be;background:#fffafa}
+.docker-activity.success{border-color:#b9dbc8;background:#f7fcf9}
+.activity-head{display:flex;align-items:flex-start;gap:14px}
+.activity-icon{width:42px;height:42px;flex:0 0 42px;border-radius:12px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-size:21px;font-weight:800}
+.docker-activity.error .activity-icon{background:#fff0ef;color:#ac453d}
+.docker-activity.success .activity-icon{background:var(--done-soft);color:var(--done)}
+.activity-copy{min-width:0;flex:1}
+.activity-copy strong{display:block;font-size:15px;line-height:1.35}
+.activity-copy p{margin:5px 0 0;max-width:680px;font-size:12px;color:var(--muted);line-height:1.55}
+.activity-badge{font-size:11px;line-height:1.25;padding:7px 9px;border:1px solid #d0e5df;border-radius:100px;color:var(--accent);font-weight:800;white-space:nowrap}
+.docker-activity.error .activity-badge{color:#a3433c;border-color:#efcecb}
+.docker-activity.success .activity-badge{color:var(--done);border-color:#bfdfce}
+.progress-track{height:7px;overflow:hidden;border-radius:100px;background:#d7ebe6;margin:18px 0 13px;position:relative}
+.progress-track span{position:absolute;inset:0 auto 0 0;width:40%;border-radius:100px;background:var(--accent);animation:qa-sweep 1.45s ease-in-out infinite}
+.activity-meta{display:flex;gap:8px 16px;justify-content:space-between;flex-wrap:wrap;color:var(--muted);font-size:12px;line-height:1.5}
+.activity-meta strong{color:var(--ink);font-variant-numeric:tabular-nums}
+.activity-spinner{display:block;width:21px;height:21px;border:2px solid #a5d6c9;border-top-color:var(--accent);border-radius:50%;animation:qa-spin .78s linear infinite}
+#note.working{display:flex;align-items:center;gap:9px;color:var(--accent);font-weight:650}
+#note.working::before{content:"";display:inline-block;flex:0 0 13px;width:13px;height:13px;border-radius:50%;border:2px solid #a6d5c9;border-top-color:var(--accent);animation:qa-spin .75s linear infinite}
+.toast-stack{position:fixed;z-index:1350;right:max(16px,env(safe-area-inset-right));top:max(16px,env(safe-area-inset-top));width:min(380px,calc(100vw - 32px));display:grid;gap:10px;pointer-events:none}
+.app-notice{pointer-events:auto;display:flex;gap:12px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;box-shadow:0 16px 42px #14273227;padding:14px 12px 14px 15px;animation:notice-in .25s ease-out both;overflow-wrap:anywhere}
+.app-notice.success{border-left-color:var(--done)}.app-notice.error{border-left-color:#b4473e}.app-notice.warning{border-left-color:var(--warning)}
+.app-notice.exit{animation:notice-out .17s ease-in both}
+.notice-symbol{display:grid;place-items:center;flex:0 0 27px;width:27px;height:27px;background:var(--accent-soft);color:var(--accent);border-radius:50%;font-size:14px;font-weight:900}
+.app-notice.success .notice-symbol{background:var(--done-soft);color:var(--done)}
+.app-notice.error .notice-symbol{background:#fff0ee;color:#a33f38}
+.app-notice.warning .notice-symbol{background:var(--warning-soft);color:var(--warning)}
+.notice-copy{min-width:0;flex:1}
+.notice-copy strong{display:block;font-size:13px;line-height:1.35}
+.notice-copy p{margin:3px 0 0;color:var(--muted);font-size:12px;line-height:1.55;white-space:pre-line;max-height:110px;overflow:auto}
+.notice-close{border:0;padding:4px;background:transparent;min-width:27px;min-height:27px;font-size:18px;line-height:1;color:var(--muted)}
+.notice-close:hover{color:var(--ink)}
+.patch-toast:not([hidden]){animation:notice-in .25s ease-out both}
+@keyframes qa-spin{to{transform:rotate(360deg)}}
+@keyframes qa-sweep{0%{transform:translateX(-120%)}50%{transform:translateX(110%)}100%{transform:translateX(350%)}}
+@keyframes notice-in{from{opacity:0;transform:translateY(-10px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes notice-out{to{opacity:0;transform:translateY(-8px) scale(.985)}}
+@media(max-width:820px){.docker-grid{grid-template-columns:minmax(0,1fr);gap:14px}.docker-panel,.docker-activity{padding:18px}}
+@media(max-width:540px){.docker-panel .row button{flex:1 1 100%}.activity-head{flex-wrap:wrap;gap:9px}.activity-badge{margin-left:50px}.activity-meta{flex-direction:column;gap:4px}.toast-stack{top:max(12px,env(safe-area-inset-top));left:12px;right:12px;width:auto}.app-notice{padding:12px}}
+@media(prefers-reduced-motion:reduce){.activity-spinner,#note.working::before{animation:none;border-color:var(--accent);border-style:dotted}.progress-track span{animation:none;width:100%;opacity:.55}.app-notice,.app-notice.exit,.patch-toast:not([hidden]){animation:none}.docker-containers button:hover{transform:none}.simple-nav button,.docker-containers button{transition:none}}
+@media(forced-colors:active){.progress-track{border:1px solid CanvasText}.progress-track span{background:Highlight}.app-notice,.docker-activity{border:2px solid CanvasText}}
 </style>
 </head>
 <body>
@@ -250,6 +298,7 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
 <div id="view"><div class="welcome"><span class="eyebrow">Mulai dari repository</span><h2>Satu kendali untuk setiap issue dan branch.</h2><p>Pilih repository di panel kiri. Jembatan akan membantu meninjau hubungan issue, commit, dan branch tanpa memerlukan API ChatGPT berbayar.</p><div class="steps"><div><span>01</span><strong>Sinkronkan repository</strong>Ambil branch dan issue dari GitHub.</div><div><span>02</span><strong>Kerjakan lewat ChatGPT</strong>Salin prompt, lalu tempel patch hasil analisis.</div><div><span>03</span><strong>Uji dan kirim PR</strong>Periksa hasil QA sebelum merge dan deploy.</div></div></div></div></section></main>
 <dialog class="confirm-dialog" id="branch-delete-dialog" aria-labelledby="branch-delete-title"><h2 id="branch-delete-title">Hapus branch dari GitHub?</h2><p id="branch-delete-description"></p><p id="branch-delete-proof"></p><label for="branch-delete-input">Ketik nama branch persis untuk konfirmasi</label><input id="branch-delete-input" autocomplete="off" spellcheck="false"><p class="modal-error" id="branch-delete-error" role="alert"></p><div class="confirm-actions"><button type="button" id="branch-delete-cancel">Batal</button><button type="button" id="branch-delete-confirm" class="danger-action" disabled>Hapus branch</button></div></dialog>
 </div>
+<div class="toast-stack" id="toast-stack" aria-label="Notifikasi aktivitas" aria-live="polite" aria-relevant="additions"></div>
 <div class="patch-toast" id="patch-toast" role="alert" aria-labelledby="patch-toast-title" hidden>
   <div class="patch-toast-top">
     <div class="patch-toast-heading"><span class="patch-toast-mark" aria-hidden="true">!</span><span id="patch-toast-title">Patch gagal diterapkan</span></div>
@@ -271,8 +320,33 @@ async function api(p,m='GET',b){
   const j=await r.json().catch(()=>({error:'Respons tidak valid'}));
   if(!r.ok)throw new Error(j.error||r.statusText);return j;
 }
-const note=(t,bad)=>{const n=$('#note');n.textContent=t;n.className=bad?'bad':''};
-async function run(label,fn,onError){note(label+'...');try{const r=await fn();note('');return r}catch(e){note(e.message,1);if(onError)onError(e)}}
+const icons={success:'✓',error:'!',warning:'!',info:'i'};
+function notify(message,kind='info',title=''){
+  const text=String(message??'').trim();if(!text)return;
+  const stack=$('#toast-stack');if(!stack)return;
+  const item=document.createElement('section');
+  const type=['success','error','warning'].includes(kind)?kind:'info';
+  item.className='app-notice '+type;
+  item.setAttribute('role',type==='error'?'alert':'status');
+  item.innerHTML='<span class="notice-symbol" aria-hidden="true">'+icons[type]+'</span><div class="notice-copy"><strong></strong><p></p></div><button type="button" class="notice-close" aria-label="Tutup notifikasi">×</button>';
+  item.querySelector('strong').textContent=title||({success:'Selesai',error:'Gagal',warning:'Perhatian',info:'Informasi'}[type]);
+  item.querySelector('p').textContent=text.length>360?text.slice(0,357)+'...':text;
+  const close=()=>{if(!item.isConnected)return;item.classList.add('exit');setTimeout(()=>item.remove(),190)};
+  item.querySelector('button').onclick=close;
+  stack.appendChild(item);
+  while(stack.children.length>4)stack.firstElementChild.remove();
+  setTimeout(close,type==='error'?11000:6500);
+}
+const note=(t,bad=false,active=false)=>{
+  const n=$('#note');n.textContent=t;n.className=bad?'bad':active?'working':'';
+  if(t&&!active)notify(t,bad?'error':'success');
+};
+let activeRequest=0;
+async function run(label,fn,onError){
+  const requestId=++activeRequest;note(label+'...',false,true);
+  try{const r=await fn();if(requestId===activeRequest)note('');return r}
+  catch(e){if(requestId===activeRequest)note(e.message,true);else notify(e.message,'error');if(onError)onError(e)}
+}
 
 let latestPatchError='';
 function showPatchError(error){
@@ -524,6 +598,50 @@ $('#view').onclick=async e=>{
   }
 };
 
+let dockerTicker=null;
+function durationLabel(started){const secs=Math.max(0,Math.floor((Date.now()-started)/1000));return Math.floor(secs/60)+'m '+String(secs%60).padStart(2,'0')+'s'}
+function renderDockerActivity(){
+  const target=$('#docker-activity');if(!target)return;
+  const op=S.dockerOperation,result=S.dockerResult;
+  if(!op&&!result){target.hidden=true;return}
+  target.hidden=false;
+  const busy=!!op,mode=busy?op.kind:result.kind;
+  const title=busy?(mode==='qa'?'Menjalankan QA':'Men-deploy aplikasi'):result.title;
+  const description=busy?
+    (mode==='qa'?'Perintah tes sedang berjalan pada container QA. Hasil ditampilkan setelah Docker selesai; belum ada persentase yang dapat diverifikasi.':
+      'Jembatan menunggu Docker Compose menyelesaikan deployment. Jangan jalankan deploy lain sebelum operasi selesai.'):result.description;
+  target.className='docker-activity docker-wide '+(busy?'running':result.ok?'success':'error');
+  target.innerHTML='<div class="activity-head"><span class="activity-icon" aria-hidden="true">'+
+    (busy?'<span class="activity-spinner"></span>':result.ok?'✓':'!')+'</span>'+
+    '<div class="activity-copy"><strong>'+esc(title)+'</strong><p>'+esc(description)+'</p></div>'+
+    '<span class="activity-badge">'+(busy?'SEDANG BERJALAN':result.ok?'SELESAI':'PERLU DIPERIKSA')+'</span></div>'+
+    (busy?'<div class="progress-track" role="progressbar" aria-label="Operasi berlangsung, tanpa informasi persentase"><span></span></div>':'')+
+    '<div class="activity-meta"><span>Repository: <strong>'+esc(busy?op.repo:result.repo)+'</strong></span>'+
+    '<span>Durasi: <strong id="docker-elapsed" aria-hidden="true">'+esc(busy?durationLabel(op.started):result.elapsed)+'</strong></span></div>';
+  const log=$('#docker-output');
+  const copy=$('#docker-copy-result');
+  if(log){log.hidden=!result;log.textContent=result?.output||''}
+  if(copy)copy.hidden=!result;
+}
+function startDockerOperation(kind,repo){
+  if(S.dockerOperation)return false;
+  S.dockerOperation={kind,repo,started:Date.now()};S.dockerResult=null;
+  renderDockerActivity();clearInterval(dockerTicker);
+  dockerTicker=setInterval(()=>{const el=$('#docker-elapsed');if(el&&S.dockerOperation)el.textContent=durationLabel(S.dockerOperation.started)},1000);
+  const btns=$('#docker-view')?.querySelectorAll('[data-docker="qa"],[data-docker="deploy"],[data-docker="save-app"],[data-docker="save-connection"]')||[];
+  btns.forEach(b=>b.disabled=true);
+  return true;
+}
+function finishDockerOperation(ok,title,description,output){
+  const op=S.dockerOperation;if(!op)return;
+  clearInterval(dockerTicker);dockerTicker=null;
+  S.dockerResult={kind:op.kind,repo:op.repo,ok,title,description,
+    elapsed:durationLabel(op.started),output:String(output||'')};
+  S.dockerOperation=null;
+  renderDockerActivity();
+  const btns=$('#docker-view')?.querySelectorAll('[data-docker="qa"],[data-docker="deploy"],[data-docker="save-app"],[data-docker="save-connection"]')||[];
+  btns.forEach(b=>b.disabled=false);
+}
 function setPage(page){
   S.page=page;
   $('#view').hidden=page!=='repos';
@@ -546,7 +664,8 @@ async function refreshDocker(){
 function drawDocker(){
   const cfg=S.dockerCfg||{},app=cfg.app||{},ssh=cfg.mode==='ssh',repo=S.repo;
   const profiles=(cfg.profiles||[]).map(p=>'<option value="'+esc(p.id)+'"'+(p.id===app.qa_profile?' selected':'')+'>'+esc(p.label)+'</option>').join('');
-  const disabled=repo?'':' disabled';
+  const disabled=repo&&!S.dockerOperation?'':' disabled';
+  const blocked=S.dockerOperation?' disabled':'';
   const html=[
    '<div class="head"><h2>Docker & QA<span>Atur koneksi, tes container QA, dan deploy per aplikasi.</span></h2><div class="row"><button data-docker="reload">Muat ulang</button><button data-docker="list">Lihat container</button></div></div>',
    '<div class="docker-grid">',
@@ -574,13 +693,15 @@ function drawDocker(){
    '<button class="danger-outline" data-docker="deploy"'+disabled+'>Deploy</button></div>',
    '<p class="docker-caption">QA hanya pada container bernama QA; pastikan database/volume QA benar-benar terpisah. Deploy meminta konfirmasi nama repo.</p>',
    '</div>',
-   '<div class="docker-panel docker-wide"><h3>3. Container & hasil</h3>',
+   '<section class="docker-activity docker-wide" id="docker-activity" aria-label="Status pekerjaan Docker" role="status" hidden></section>',
+   '<div class="docker-panel docker-wide"><div class="docker-section-heading"><h3>3. Container & hasil</h3><button type="button" id="docker-copy-result" data-docker="copy-result" hidden>Salin hasil</button></div>',
    '<p>Daftar container aktif dan hasil operasi yang kamu jalankan.</p>',
    '<div id="docker-container-list" class="docker-containers"><span class="mute">Klik Lihat container.</span></div>',
    '<pre id="docker-output" class="docker-out" hidden aria-live="polite"></pre></div>',
    '</div>'
   ].join('');
   $('#docker-view').innerHTML=html;
+  renderDockerActivity();
 }
 $('#docker-view').onchange=e=>{
   if(e.target&&e.target.id==='docker-mode')$('#docker-ssh-fields').hidden=e.target.value!=='ssh';
@@ -591,7 +712,13 @@ $('#docker-view').onclick=async e=>{
   const b=e.target.closest('[data-docker]');
   if(!b)return;
   const act=b.dataset.docker,repo=S.repo;
-  const output=t=>{const el=$('#docker-output');if(el){el.hidden=false;el.textContent=String(t)}};
+  if(act==='copy-result'){
+    const value=S.dockerResult?.output||'';
+    if(!value)return;
+    try{await navigator.clipboard.writeText(value);notify('Hasil operasi tersalin.','success')}
+    catch(_){notify('Clipboard tidak tersedia. Pilih teks hasil dan salin manual.','warning')}
+    return;
+  }
   if(act==='reload')return refreshDocker();
   if(act==='save-connection'){
     const data={mode:$('#docker-mode').value,host:$('#docker-host').value.trim(),
@@ -602,13 +729,13 @@ $('#docker-view').onclick=async e=>{
   }
   if(act==='test'){
     const r=await run('Tes koneksi Docker',()=>api('/api/docker/connection'));
-    if(r)$('#docker-connection-result').textContent='Terhubung · Docker '+r.engine_version+' · '+r.server;
+    if(r){$('#docker-connection-result').textContent='Terhubung · Docker '+r.engine_version+' · '+r.server;notify('Terhubung ke Docker '+r.server+'.','success','Koneksi Docker')}
     return;
   }
   if(act==='list'){
     const r=await run('Membaca container',()=>api('/api/docker/containers'));
     if(r){
-      S.dockerContainers=r.containers||[];
+      S.dockerContainers=r.containers||[];notify('Terbaca '+S.dockerContainers.length+' container aktif.','info','Daftar Docker');
       $('#docker-container-list').innerHTML=S.dockerContainers.length?
         S.dockerContainers.map(c=>'<button data-qa-fill="'+esc(c.name)+'" type="button" title="Pilih container QA">'+esc(c.name)+' · '+esc(c.status)+'</button>').join(''):
         '<span class="mute">Tidak ada container running.</span>';
@@ -624,17 +751,29 @@ $('#docker-view').onclick=async e=>{
     return;
   }
   if(act==='qa'){
+    if(S.dockerOperation)return notify('Masih ada operasi Docker yang berjalan.','warning');
     if(!confirm('Jalankan tes preset hanya di container QA yang database dan volumenya sudah kamu pisahkan dari production?'))return;
+    startDockerOperation('qa',repo);
     const r=await run('Menjalankan QA',()=>api('/api/docker/qa','POST',{repo}));
-    if(r)output((r.ok?'QA COMMAND PASS':'QA COMMAND FAIL')+' · '+r.container+' · '+r.profile+
-      '\n\n'+r.output+'\n\nCatatan: tes container existing tidak otomatis membuktikan commit branch terakhir diuji.');
+    const log=r?((r.ok?'QA COMMAND PASS':'QA COMMAND FAIL')+' · '+r.container+' · '+r.profile+
+      '\n\n'+r.output+'\n\nCatatan: tes container existing tidak otomatis membuktikan commit branch terakhir diuji.'):'Permintaan QA gagal. Lihat notifikasi error di atas.';
+    finishDockerOperation(!!r?.ok,r?.ok?'Tes QA selesai':'QA belum lulus',
+      r?.ok?'Perintah pada container QA selesai dengan exit code 0. Ini bukan bukti commit terbaru sudah diuji.':
+        'Periksa log dan konfigurasi container QA. Aplikasi production tidak disentuh oleh tombol QA.',log);
+    if(r)notify(r.ok?'Perintah QA lulus pada '+r.container+'.':'Tes QA gagal pada '+r.container+'. Periksa hasil. ',r.ok?'success':'error',r.ok?'QA selesai':'QA gagal');
     return;
   }
   if(act==='deploy'){
+    if(S.dockerOperation)return notify('Masih ada operasi Docker yang berjalan.','warning');
     const typed=prompt('Konfirmasi deploy production. Ketik nama repository persis:\n'+repo);
     if(typed!==repo)return note('Deploy dibatalkan: konfirmasi tidak cocok.',1);
+    startDockerOperation('deploy',repo);
     const r=await run('Deploy aplikasi',()=>api('/api/deploy','POST',{repo,confirm:typed}));
-    if(r)output('Deploy selesai: '+r.path+'\n\n'+r.output+'\n\n'+r.status);
+    finishDockerOperation(!!r,'Hasil deployment',
+      r?'Perintah deployment selesai. Tinjau hasil dan healthcheck aplikasi sebelum menganggap rilis sehat.':
+        'Deployment gagal atau tidak selesai. Periksa notifikasi dan status container production.',
+      r?'Deploy: '+r.path+'\n\n'+r.output+'\n\n'+r.status:'Permintaan deployment gagal. Periksa notifikasi error.');
+    if(r)notify('Perintah deployment selesai untuk '+repo+'. Periksa healthcheck.','success','Deploy selesai');
   }
 };
 
