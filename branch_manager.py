@@ -35,9 +35,11 @@ def _same_repo_pr(pr, repo, branch):
     return upstream.get("full_name") == repo and head.get("ref") == branch
 
 
-def inventory(app, repo):
+def inventory(app, repo, refresh=True):
     """Analyze refs; deletion permission is recomputed on the server later."""
     d = _local(app, repo)
+    if refresh:
+        app.git(d, "fetch", "origin", "--prune", net=True, timeout=300)
     meta = app.gh(f"/repos/{repo}")
     base = meta.get("default_branch")
     if not base:
@@ -51,10 +53,16 @@ def inventory(app, repo):
         for b in _pages(app, f"/repos/{repo}/branches")
     }
     open_prs = _pages(app, f"/repos/{repo}/pulls?state=open")
-    # Closed PR history is optional evidence; never makes an unmerged branch safe.
-    closed_prs = _pages(app, f"/repos/{repo}/pulls?state=closed", max_pages=10)
+    # Scan recent closed PRs for merged-PR evidence; absence never grants safety.
+    closed_prs = []
+    for page in range(1, 6):
+        items = app.gh(f"/repos/{repo}/pulls?state=closed&sort=updated&direction=desc&per_page=100&page={page}")
+        if not isinstance(items, list):
+            raise app.Err("Riwayat PR GitHub tidak valid.", 502)
+        closed_prs.extend(items)
+        if len(items) < 100:
+            break
 
-    fmt = "%(refname:short)%x1f%(objectname)%x1f%(committerdate:short)"
     # Git's for-each-ref format uses literal ASCII unit separator.
     fmt = "%(refname:short)\x1f%(objectname)\x1f%(committerdate:short)"
     all_refs = app.git(d, "for-each-ref", f"--format={fmt}",
@@ -146,7 +154,7 @@ def delete_remote(app, repo, branch, expected_sha):
         raise app.Err("Nama branch tidak valid.", 400)
     # Always fetch again; the preview may be stale.
     app.git(d, "fetch", "origin", "--prune", net=True, timeout=300)
-    snapshot = inventory(app, repo)
+    snapshot = inventory(app, repo, refresh=False)
     if branch == snapshot["base"]:
         raise app.Err("Branch utama tidak boleh dihapus.", 403)
     row = next((item for item in snapshot["branches"] if item["name"] == branch), None)
