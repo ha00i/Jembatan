@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Jembatan: ChatGPT <-> GitHub. Hanya library standar Python. Lihat README.md."""
 import base64, hmac, json, os, re, shlex, subprocess, sys, tempfile, threading, time
+import branch_manager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib import error as urlerr, request as urlreq
@@ -316,6 +317,9 @@ ROUTES = {
     ("GET", "/api/repos"): lambda q, b: list_repos(),
     ("POST", "/api/sync"): lambda q, b: sync(b["repos"]),
     ("GET", "/api/overview"): lambda q, b: overview(q["repo"]),
+    ("GET", "/api/branches"): lambda q, b: branch_manager.inventory(sys.modules[__name__], q["repo"]),
+    ("POST", "/api/branches/delete"): lambda q, b: branch_manager.delete_remote(
+        sys.modules[__name__], b["repo"], b["branch"], b["sha"]),
     ("POST", "/api/prompt"): lambda q, b: build_prompt(b["repo"], int(b["issue"]), b.get("branch") or None,
                                                        b.get("files") or []),
     ("POST", "/api/apply"): lambda q, b: apply_patch(b["repo"], int(b["issue"]), b["reply"],

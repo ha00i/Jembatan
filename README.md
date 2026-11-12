@@ -22,6 +22,41 @@ chat ChatGPT dan menempel balasannya kembali. Sisanya otomatis.
 5. Push dan buat PR. Setelah ditinjau, pakai perintah merge yang ditampilkan.
 6. Deploy dengan Docker menjalankan `docker compose up -d --build` dari branch utama.
 
+## Manajemen branch (fitur baru)
+
+Setelah repository disinkronkan, buka **Manajemen branch** di bawah daftar issue.
+Jembatan akan mengambil refs GitHub terbaru dan menampilkan setiap branch, hash commit,
+jumlah commit yang di depan/tertinggal dari default branch, tempat branch tergabung,
+serta bukti yang digunakan:
+
+- **Riwayat Git:** commit HEAD branch benar-benar menjadi ancestor branch tujuan.
+- **PR #N:** pull request terkonfirmasi merged dan SHA branch sama persis dengan SHA terakhir PR (termasuk squash/rebase).
+- **Aman dihapus:** sudah tergabung ke *default branch*, tidak terlindungi, tidak punya PR terbuka.
+- **Perlu ditinjau:** sudah terdeteksi di branch lain seperti `staging` tetapi belum di default branch.
+- **Belum tergabung / dilindungi / aktif:** tombol hapus dinonaktifkan.
+
+Tombol **Hapus** meminta pengetikan ulang nama branch. Backend kemudian melakukan
+`git fetch`, mengulang semua pemeriksaan GitHub, dan hanya menghapus remote branch
+bila SHA-nya **tidak berubah** menggunakan `git push --force-with-lease`.
+Branch default tidak dapat dihapus. Branch lokal yang mungkin masih ada tidak ikut dihapus.
+Jika branch sudah berubah, masih dipakai PR terbuka, atau ada aturan proteksi,
+penghapusan gagal dan pengguna perlu memuat ulang. Menutup issue **tidak** membuat
+branch otomatis aman.
+
+**Catatan:** label aman merujuk keamanan *pembersihan branch* berdasarkan bukti integrasi;
+bukan pernyataan bahwa QA/deploy lulus. Bukti PR merged tidak selalu berarti commit SHA
+menjadi ancestor karena squash merge. Riwayat PR diperiksa sampai 500 PR tertutup terbaru;
+untuk riwayat lebih lama yang tidak bisa dibuktikan, branch ditandai perlu disimpan.
+
+API: `GET /api/branches?repo=owner/name` dan
+`POST /api/branches/delete` dengan JSON
+`{"repo":"owner/name","branch":"feature","sha":"<full SHA>"}`.
+Keduanya memerlukan autentikasi UI.
+
+Uji modul tanpa layanan eksternal: `python -m unittest discover -s tests -v`.
+Pengujian integrasi pada GitHub dan pengecekan proteksi branch tetap harus dilakukan
+pada repo uji sebelum penghapusan branch produksi.
+
 ## Keamanan
 - Bot hanya push ke branch `bridge/*`, tidak pernah ke branch utama.
 - UI tidak menerima perintah bebas. Test dan deploy memakai perintah tetap dari `.env`.

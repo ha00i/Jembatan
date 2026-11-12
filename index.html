@@ -140,6 +140,59 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 @media(forced-colors:active){.repo.on,button.go,.chip[aria-pressed=true]{outline:2px solid ButtonText}}
 
+
+
+/* Branch inventory: evidence is shown beside every decision. */
+.branch-panel{margin-top:35px}
+.branch-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:6px}
+.branch-head h3{margin:0;font-size:20px}
+.branch-help{color:var(--muted);font-size:13px;margin:0 0 16px;max-width:840px}
+.branch-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 12px}
+.branch-filters{display:flex;flex-wrap:wrap;gap:5px}
+.branch-filter{padding:7px 11px;border-radius:6px;font-size:12px;background:transparent;color:var(--muted)}
+.branch-filter[aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.branch-search{max-width:260px;width:100%;font-size:13px}
+.branch-table{border:1px solid var(--line);background:var(--surface);border-radius:var(--radius);overflow:hidden}
+.branch-grid-head,.branch-grid-row{display:grid;grid-template-columns:minmax(170px,1.1fr) minmax(170px,1fr) minmax(92px,.55fr) minmax(220px,1.6fr) auto;gap:16px;align-items:start}
+.branch-grid-head{padding:11px 17px;border-bottom:1px solid var(--line);background:#f8faf9;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:750}
+.branch-grid-row{padding:17px;border-bottom:1px solid var(--line);font-size:13px}
+.branch-grid-row:last-child{border-bottom:0}
+.branch-cell{min-width:0;overflow-wrap:anywhere}
+.branch-cell code{display:block;font-size:12px;font-weight:700;overflow-wrap:anywhere}
+.branch-cell small{display:block;color:var(--muted);font-size:11px;margin-top:4px;line-height:1.5}
+.branch-cell strong{font-size:12px}
+.branch-to span{display:block;line-height:1.6}
+.branch-target-origin{color:var(--muted);font-size:11px}
+.branch-badge{display:inline-block;padding:4px 8px;border:1px solid var(--line);border-radius:5px;font-weight:750;font-size:11px}
+.branch-badge.safe{color:var(--done);background:var(--done-soft);border-color:#cde4d2}
+.branch-badge.review{color:var(--review);background:var(--review-soft);border-color:#e3d6ec}
+.branch-badge.blocked,.branch-badge.keep{color:var(--muted);background:var(--pending-soft)}
+.branch-grid-row .branch-cell button{white-space:nowrap}
+.branch-grid-row .branch-cell button:disabled{background:#f1f3f3;color:#7a878b}
+.branch-blank{padding:22px;color:var(--muted);font-size:13px}
+.branch-legend{margin-top:12px;color:var(--muted);font-size:12px}
+.confirm-dialog{border:1px solid var(--line);background:var(--surface);color:var(--ink);width:min(100% - 32px,490px);border-radius:14px;padding:25px;box-shadow:0 28px 70px #101f2736}
+.confirm-dialog::backdrop{background:#101b25a0}
+.confirm-dialog h2{margin:0 0 8px;font-size:23px}
+.confirm-dialog p{font-size:13px;color:var(--muted);margin:0 0 15px}
+.confirm-dialog label{display:block;font-weight:700;font-size:13px;margin:15px 0 7px}
+.confirm-dialog input{width:100%;font-family:ui-monospace,Consolas,monospace}
+.confirm-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:19px}
+.confirm-dialog .danger-action{background:#9d3e35;color:#fff;border-color:#9d3e35}
+.confirm-dialog .danger-action:hover{background:#7d322c;color:#fff}
+.confirm-dialog .danger-action:disabled{opacity:.45}
+.confirm-dialog .modal-error{color:#a33a31;font-weight:650}
+@media(max-width:1200px){.branch-grid-head,.branch-grid-row{grid-template-columns:minmax(140px,1fr) minmax(135px,1fr) 90px minmax(160px,1.2fr) auto;gap:11px}}
+@media(max-width:1050px){
+ .branch-grid-head{display:none}
+ .branch-grid-row{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:13px;border-bottom:1px solid var(--line)}
+ .branch-grid-row .branch-cell::before{content:attr(data-label);display:block;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+ .branch-cell.branch-status{grid-column:1/3}
+ .branch-cell.branch-controls{grid-column:1/3}
+ .branch-cell.branch-controls button{width:100%}
+}
+@media(max-width:540px){.branch-search{max-width:none}.branch-toolbar{align-items:stretch}.branch-search{flex:1 1 100%}}
+
 </style>
 </head>
 <body>
@@ -153,12 +206,13 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
   <div class="sidebar-foot"><p><span class="mini-led" aria-hidden="true"></span>Tanpa API model berbayar</p><button id="logout" class="quiet">Keluar</button></div>
 </aside>
 <main><header class="topbar"><div class="crumb"><strong>Workspace</strong><span>/</span>Operasi repository</div><div class="connect-note"><span class="mini-led" aria-hidden="true"></span>ChatGPT manual · Eksekusi GitHub lokal</div></header><section class="content"><div id="note" role="status" aria-live="polite"></div><div id="view"><div class="welcome"><span class="eyebrow">Mulai dari repository</span><h2>Satu kendali untuk setiap issue dan branch.</h2><p>Pilih repository di panel kiri. Jembatan akan membantu meninjau hubungan issue, commit, dan branch tanpa memerlukan API ChatGPT berbayar.</p><div class="steps"><div><span>01</span><strong>Sinkronkan repository</strong>Ambil branch dan issue dari GitHub.</div><div><span>02</span><strong>Kerjakan lewat ChatGPT</strong>Salin prompt, lalu tempel patch hasil analisis.</div><div><span>03</span><strong>Uji dan kirim PR</strong>Periksa hasil QA sebelum merge dan deploy.</div></div></div></div></section></main>
+<dialog class="confirm-dialog" id="branch-delete-dialog" aria-labelledby="branch-delete-title"><h2 id="branch-delete-title">Hapus branch dari GitHub?</h2><p id="branch-delete-description"></p><p id="branch-delete-proof"></p><label for="branch-delete-input">Ketik nama branch persis untuk konfirmasi</label><input id="branch-delete-input" autocomplete="off" spellcheck="false"><p class="modal-error" id="branch-delete-error" role="alert"></p><div class="confirm-actions"><button type="button" id="branch-delete-cancel">Batal</button><button type="button" id="branch-delete-confirm" class="danger-action" disabled>Hapus branch</button></div></dialog>
 </div>
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ST={none:['Belum ada pekerjaan',1],ready:['Commit ditemukan · perlu validasi QA',2],merged_open:['Terindikasi di main · issue masih terbuka',3],done:['Issue ditutup · verifikasi QA terpisah',4]};
-let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},filter:'all',issueQuery:'',selected:new Set()};
+let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},filter:'all',issueQuery:'',selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0};
 $('#tok').value=tok;
 
 async function api(p,m='GET',b){
@@ -191,10 +245,10 @@ function drawRepos(){
 $('#repos').onclick=e=>{const b=e.target.closest('[data-open]');if(b)openRepo(b.dataset.open)};
 
 async function openRepo(n){
-  S.repo=n;S.filter='all';S.issueQuery='';S.data=null;drawRepos();
+  S.repo=n;S.filter='all';S.issueQuery='';S.data=null;S.branchData=null;S.branchError=null;S.branchLoading=true;S.branchQuery='';S.branchFilter='all';S.branchRequestId++;if($('#branch-delete-dialog').open)$('#branch-delete-dialog').close();drawRepos();
   $('#view').innerHTML='<div class="welcome"><span class="eyebrow">Memuat repository</span><h2>Memeriksa issue dan branch...</h2><p>Data dibaca dari sinkronisasi lokal dan GitHub.</p></div>';
   const d=await run('Membaca branch dan issue',()=>api('/api/overview?repo='+encodeURIComponent(n)));
-  if(d){S.data=d;drawMain()}
+  if(d){S.data=d;drawMain();refreshBranches(n)}
   else{$('#view').innerHTML='<div class="welcome"><span class="eyebrow">Repository belum siap</span><h2>Workspace belum dapat dibuka.</h2><p>Sinkronkan repo terlebih dahulu, lalu periksa pesan kesalahan di atas.</p></div>'}
 }
 function drawMain(){
@@ -209,8 +263,8 @@ function drawMain(){
    <div class="workbar"><h3>Daftar pekerjaan</h3><label class="issue-search"><input id="issue-search" aria-label="Cari issue" placeholder="Cari judul atau nomor issue..." value="${esc(S.issueQuery)}"></label></div>
    <div class="chips">${chips.map(([k,l,c])=>`<button class="chip" data-chip="${k}" aria-pressed="${S.filter===k}">${esc(l)}: ${c}</button>`).join('')}</div>
    <div id="work-items">${list.map(row).join('')||'<p class="mute">Tidak ada issue sesuai filter.</p>'}</div>
-   <h3>Branch yang tidak menyebut issue apa pun</h3>
-   ${d.orphans.length?`<ul>${d.orphans.map(b=>`<li><code>${esc(b.name)}</code>: ${b.ahead} commit di depan, ${b.behind} tertinggal${b.merged?', sudah masuk':''} (${esc(b.date)})</li>`).join('')}</ul>`:'<p class="mute">Tidak ada.</p>'}`;
+   <section id="branch-panel" class="branch-panel" aria-label="Manajemen branch"></section>`;
+  drawBranchPanel();
 }
 function row(i){
   const [lbl,k]=ST[i.status],open=S.open===i.number?' open':'';
@@ -232,11 +286,118 @@ function row(i){
     <div data-push hidden><button class="go" data-act="push">Push dan buat PR</button></div>
    </div></details>`;
 }
-$('#view').oninput=e=>{if(e.target.id==='issue-search'){S.issueQuery=e.target.value;const rows=S.data.issues.filter(i=>(S.filter==='all'||i.status===S.filter)&&(!S.issueQuery||(i.title+' #'+i.number).toLowerCase().includes(S.issueQuery.toLowerCase())));$('#work-items').innerHTML=rows.map(row).join('')||'<p class="mute">Tidak ada issue sesuai filter.</p>';}};
+
+const BRANCH_LABELS={safe:'Aman dihapus',review:'Perlu ditinjau',keep:'Belum tergabung',blocked:'Dilindungi / aktif'};
+let pendingBranchDelete=null;
+function branchRows(rows){
+  if(!rows.length)return '<div class="branch-blank">Tidak ada branch untuk filter ini.</div>';
+  return rows.map(b=>{
+    const targets=(b.merged_into||[]).map(t=>
+      '<span><strong>'+esc(t.name)+'</strong> <span class="branch-target-origin">'+
+      (t.evidence==='ancestry'?'(riwayat Git)':'(PR #'+esc(t.pr)+')')+'</span></span>'
+    ).join('');
+    const safe=b.safe_to_delete===true;
+    return '<div class="branch-grid-row">'+
+      '<div class="branch-cell" data-label="Branch"><code>'+esc(b.name)+'</code><small>'+esc(b.sha.slice(0,9))+' · '+esc(b.date)+'</small></div>'+
+      '<div class="branch-cell branch-to" data-label="Sudah masuk ke">'+(targets||(b.name===S.branchData?.base?'<span class="mute">Branch utama (acuan)</span>':'<span class="mute">Belum ada bukti</span>'))+'</div>'+
+      '<div class="branch-cell" data-label="Dibanding default"><strong>+'+Number(b.ahead)+' / −'+Number(b.behind)+'</strong><small>Di depan / tertinggal</small></div>'+
+      '<div class="branch-cell branch-status" data-label="Keamanan"><span class="branch-badge '+esc(b.status)+'">'+esc(BRANCH_LABELS[b.status]||b.status)+'</span><small>'+esc(b.reason)+'</small></div>'+
+      '<div class="branch-cell branch-controls" data-label="Tindakan">'+
+      (safe?'<button class="danger-outline" data-act="branch-delete" data-branch="'+esc(b.name)+'">Hapus</button>':
+      '<button disabled title="'+esc(b.reason)+'">Tidak bisa dihapus</button>')+'</div>'+
+      '</div>';
+  }).join('');
+}
+function branchFiltered(){
+  if(!S.branchData)return [];
+  const q=S.branchQuery.trim().toLowerCase();
+  return S.branchData.branches.filter(b=>
+    (S.branchFilter==='all'||b.status===S.branchFilter) &&
+    (!q||(b.name+' '+b.status+' '+(b.merged_into||[]).map(x=>x.name).join(' ')).toLowerCase().includes(q))
+  );
+}
+function drawBranchPanel(){
+  const panel=$('#branch-panel');if(!panel)return;
+  const data=S.branchData;
+  const all=data?.branches||[];
+  const opts=[['all','Semua',all.length],['safe','Aman',all.filter(b=>b.status==='safe').length],
+    ['review','Perlu tinjau',all.filter(b=>b.status==='review').length],
+    ['keep','Belum masuk',all.filter(b=>b.status==='keep').length],
+    ['blocked','Dilindungi / aktif',all.filter(b=>b.status==='blocked').length]];
+  panel.innerHTML='<div class="branch-head"><h3>Manajemen branch</h3>'+
+    '<button data-act="branches-refresh">Periksa ulang</button></div>'+
+    '<p class="branch-help">Lihat branch sudah tergabung di mana dan apakah aman dihapus. '+esc(S.branchData?'Hasil dari GitHub dan commit terbaru yang tersinkron.':'Jembatan memeriksa riwayat commit, PR, dan proteksi branch.')+
+    ' Penghapusan hanya untuk branch yang terbukti tergabung ke '+esc(data?.base||S.data?.base||'main')+'.</p>'+
+    (S.branchLoading?'<div class="branch-blank">Memeriksa branch dari GitHub...</div>':
+    S.branchError?'<div class="branch-blank bad">'+esc(S.branchError)+' <button data-act="branches-refresh">Coba lagi</button></div>':
+    !data?'<div class="branch-blank">Belum ada hasil pemeriksaan.</div>':
+    '<div class="branch-toolbar"><div class="branch-filters">'+opts.map(([v,l,n])=>
+      '<button class="branch-filter" data-branch-filter="'+v+'" aria-pressed="'+(S.branchFilter===v)+'">'+esc(l)+' ('+n+')</button>').join('')+
+    '</div><input id="branch-search" class="branch-search" aria-label="Cari branch" placeholder="Cari branch / tujuan merge" value="'+esc(S.branchQuery)+'"></div>'+
+    '<div class="branch-table"><div class="branch-grid-head"><span>Nama branch</span><span>Sudah masuk ke</span><span>Commit</span><span>Penilaian keamanan</span><span>Aksi</span></div>'+
+    '<div id="branch-list">'+branchRows(branchFiltered())+'</div></div>'+
+    '<p class="branch-legend"><span id="branch-visible-count">'+branchFiltered().length+'</span> dari '+all.length+' branch · Safe berarti integrasi HEAD terverifikasi, bukan bukti QA atau deploy.</p>');
+}
+async function refreshBranches(repo){
+  const requestId=++S.branchRequestId;
+  S.branchLoading=true;S.branchError=null;drawBranchPanel();
+  try{
+    const value=await api('/api/branches?repo='+encodeURIComponent(repo));
+    if(S.repo!==repo||S.branchRequestId!==requestId)return;
+    if(!Array.isArray(value.branches))throw new Error('Respons daftar branch tidak valid');
+    S.branchData=value;S.branchError=null;
+  }catch(e){
+    if(S.repo!==repo||S.branchRequestId!==requestId)return;
+    S.branchError=e.message;S.branchData=null;
+  }finally{
+    if(S.repo===repo&&S.branchRequestId===requestId){S.branchLoading=false;drawBranchPanel()}
+  }
+}
+function openBranchDelete(repo, name){
+  const row=S.branchData?.branches.find(b=>b.name===name);
+  if(!row?.safe_to_delete)return note('Branch belum memenuhi syarat penghapusan.',true);
+  pendingBranchDelete={repo,branch:name,sha:row.sha};
+  $('#branch-delete-description').textContent='Repository: '+repo+' · Branch: '+name+
+    '. Tindakan ini menghapus branch remote GitHub, bukan branch utama.';
+  $('#branch-delete-proof').textContent='Bukti: '+row.reason;
+  $('#branch-delete-input').value='';
+  $('#branch-delete-error').textContent='';
+  $('#branch-delete-confirm').disabled=true;
+  $('#branch-delete-dialog').showModal();
+  $('#branch-delete-input').focus();
+}
+$('#branch-delete-input').oninput=()=>{
+  $('#branch-delete-confirm').disabled= !pendingBranchDelete ||
+    $('#branch-delete-input').value!==pendingBranchDelete.branch;
+};
+$('#branch-delete-cancel').onclick=()=>$('#branch-delete-dialog').close();
+$('#branch-delete-dialog').onclose=()=>{pendingBranchDelete=null;$('#branch-delete-error').textContent='';};
+$('#branch-delete-confirm').onclick=async()=>{
+  const p=pendingBranchDelete,btn=$('#branch-delete-confirm');
+  if(!p||S.repo!==p.repo||$('#branch-delete-input').value!==p.branch)return;
+  btn.disabled=true;$('#branch-delete-cancel').disabled=true;
+  try{
+    const result=await api('/api/branches/delete','POST',{repo:p.repo,branch:p.branch,sha:p.sha});
+    $('#branch-delete-dialog').close();
+    await refreshBranches(p.repo);
+    note('Branch '+p.branch+' dihapus dari GitHub.'+(result.warning?' '+result.warning:''));
+  }catch(e){
+    $('#branch-delete-error').textContent=e.message;
+  }finally{
+    $('#branch-delete-cancel').disabled=false;
+    btn.disabled= !pendingBranchDelete ||
+      $('#branch-delete-input').value!==pendingBranchDelete.branch;
+  }
+};
+
+$('#view').oninput=e=>{if(e.target.id==='branch-search'){S.branchQuery=e.target.value;const list=$('#branch-list');if(list)list.innerHTML=branchRows(branchFiltered());const num=$('#branch-visible-count');if(num)num.textContent=branchFiltered().length;return;}if(e.target.id==='issue-search'){S.issueQuery=e.target.value;const rows=S.data.issues.filter(i=>(S.filter==='all'||i.status===S.filter)&&(!S.issueQuery||(i.title+' #'+i.number).toLowerCase().includes(S.issueQuery.toLowerCase())));$('#work-items').innerHTML=rows.map(row).join('')||'<p class="mute">Tidak ada issue sesuai filter.</p>';}};
 $('#view').onclick=async e=>{
   const c=e.target.closest('[data-chip]');if(c){S.filter=c.dataset.chip;return drawMain()}
+  const bf=e.target.closest('[data-branch-filter]');if(bf){S.branchFilter=bf.dataset.branchFilter;return drawBranchPanel()}
   const b=e.target.closest('[data-act]');if(!b)return;
   const act=b.dataset.act,box=b.closest('details'),n=box&&+box.dataset.n,q=s=>box.querySelector(s),repo=S.repo;
+  if(act==='branches-refresh')return refreshBranches(repo);
+  if(act==='branch-delete')return openBranchDelete(repo,b.dataset.branch);
   if(act==='reload')return openRepo(repo);
   if(act==='copy')return copy(q(b.dataset.sel));
   if(act==='deploy'){
