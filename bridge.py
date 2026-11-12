@@ -324,6 +324,10 @@ def deployment_target(r):
 
 def deploy_readiness(r):
     branch, sha, settings = deployment_target(r)
+    if not settings["deploy_path"]:
+        return {"repo": r, "branch": branch, "sha": sha,
+                "qa_ready": False, "qa_job_id": None, "deploy_path": "",
+                "reason": "Path Compose aplikasi belum disimpan di Settings Docker & QA."}
     try:
         proof = docker_action(qa_jobs.require_verified, r, branch, sha)
         return {"repo": r, "branch": branch, "sha": sha,
