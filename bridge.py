@@ -310,12 +310,45 @@ def docker_action(func, *args):
     except docker_control.DockerError as e:
         raise Err(str(e), e.code) from e
 
+def deploy_branch_options(r):
+    """List supported deploy branches actually present on the selected GitHub repo."""
+    repo_dir(r)  # full-name validation, no checkout required
+    meta = gh(f"/repos/{r}")
+    branches = gh_pages(f"/repos/{r}/branches", limit=5)
+    names = {item.get("name") for item in branches if isinstance(item, dict)}
+    available = [name for name in ("main", "staging") if name in names]
+    current = docker_action(docker_control._app_settings, r)["deploy_branch"]
+    return {"repo": r, "available": available, "configured": current,
+            "configured_exists": current in available,
+            "default_branch": meta.get("default_branch", "")}
+
+
+def save_docker_app(body):
+    if not isinstance(body, dict):
+        raise Err("Pengaturan aplikasi tidak valid", 400)
+    r = body.get("repo")
+    repo_dir(r)
+    branch = body.get("deploy_branch", "main")
+    if branch not in ("main", "staging"):
+        raise Err("Target deploy hanya boleh main atau staging", 409)
+    options = deploy_branch_options(r)
+    if branch not in options["available"]:
+        names = ", ".join(options["available"]) or "tidak ada main/staging"
+        raise Err(f"Branch '{branch}' tidak ada pada {r}. Pilih branch tersedia: {names}.", 409)
+    return docker_action(docker_control.save_app, body)
+
+
 def deployment_target(r):
     settings = docker_action(docker_control._app_settings, r)
     branch = settings.get("deploy_branch", "main")
     if branch not in ("main", "staging"):
         raise Err("Branch target deployment tidak didukung", 409)
-    remote = gh(f"/repos/{r}/branches/{branch}")
+    try:
+        remote = gh(f"/repos/{r}/branches/{branch}")
+    except Err as error:
+        if "Branch not found" in str(error) and "GitHub 404:" in str(error):
+            raise Err(f"Branch '{branch}' tidak ada di GitHub untuk {r}. Pilih branch yang tersedia di Docker & QA, lalu klik Simpan aplikasi.", 409) from error
+        raise
     sha = (remote.get("commit") or {}).get("sha", "")
     if not re.fullmatch(r"[a-fA-F0-9]{40}", sha):
         raise Err("GitHub belum memberikan SHA commit yang valid", 502)
@@ -323,7 +356,15 @@ def deployment_target(r):
 
 
 def deploy_readiness(r):
-    branch, sha, settings = deployment_target(r)
+    try:
+        branch, sha, settings = deployment_target(r)
+    except Err as error:
+        if error.code != 409:
+            raise
+        settings = docker_action(docker_control._app_settings, r)
+        return {"repo": r, "branch": settings.get("deploy_branch", "main"), "sha": None,
+                "qa_ready": False, "qa_job_id": None,
+                "deploy_path": settings["deploy_path"], "reason": str(error)}
     if not settings["deploy_path"]:
         return {"repo": r, "branch": branch, "sha": sha,
                 "qa_ready": False, "qa_job_id": None, "deploy_path": "",
@@ -375,8 +416,8 @@ ROUTES = {
         docker_control.public_settings, q.get("repo")),
     ("POST", "/api/docker/settings"): lambda q, b: docker_action(
         docker_control.save_connection, b),
-    ("POST", "/api/docker/app"): lambda q, b: docker_action(
-        docker_control.save_app, b),
+    ("POST", "/api/docker/app"): lambda q, b: save_docker_app(b),
+    ("GET", "/api/deploy/branches"): lambda q, b: deploy_branch_options(q["repo"]),
     ("GET", "/api/docker/connection"): lambda q, b: docker_action(
         docker_control.connection_test),
     ("GET", "/api/docker/containers"): lambda q, b: docker_action(
