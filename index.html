@@ -416,7 +416,7 @@ function drawBranchPanel(){
     ['keep','Belum masuk',all.filter(b=>b.status==='keep').length],
     ['blocked','Dilindungi / aktif',all.filter(b=>b.status==='blocked').length]];
   panel.innerHTML='<div class="branch-head"><h3>Manajemen branch</h3>'+
-    '<button data-act="branches-refresh">Periksa ulang</button></div>'+
+    '<div class="row"><button data-act="branches-refresh">Periksa ulang</button><button data-act="branches-cleanup">Hapus semua branch aman</button></div></div>'+
     '<p class="branch-help">Lihat branch sudah tergabung di mana dan apakah aman dihapus. '+esc(S.branchData?'Hasil dari GitHub dan commit terbaru yang tersinkron.':'Jembatan memeriksa riwayat commit, PR, dan proteksi branch.')+
     ' Penghapusan hanya untuk branch yang terbukti tergabung ke '+esc(data?.base||S.data?.base||'main')+'.</p>'+
     (S.branchLoading?'<div class="branch-blank">Memeriksa branch dari GitHub...</div>':
@@ -481,13 +481,23 @@ $('#branch-delete-confirm').onclick=async()=>{
   }
 };
 
-$('#view').oninput=e=>{if(e.target.id==='branch-search'){S.branchQuery=e.target.value;const list=$('#branch-list');if(list)list.innerHTML=branchRows(branchFiltered());const num=$('#branch-visible-count');if(num)num.textContent=branchFiltered().length;return;}if(e.target.id==='issue-search'){S.issueQuery=e.target.value;const rows=S.data.issues.filter(i=>(S.filter==='all'||i.status===S.filter)&&(!S.issueQuery||(i.title+' #'+i.number).toLowerCase().includes(S.issueQuery.toLowerCase())));$('#work-items').innerHTML=rows.map(row).join('')||'<p class="mute">Tidak ada issue sesuai filter.</p>';}};
+$('#view').oninput=e=>{if(e.target.id==='branch-search'){S.branchQuery=e.target.value;const list=$('#branch-list');if(list)list.innerHTML=branchRows(branchFiltered());const num=$('#branch-visible-count');if(num)num.textContent=branchFiltered().length;return;}if(e.target.id==='issue-search'){S.issueQuery=e.target.value;const rows=S.data.issues.filter(i=>(S.showClosed||i.state==='open')&&(S.filter==='all'||i.status===S.filter)&&(!S.issueQuery||(i.title+' #'+i.number).toLowerCase().includes(S.issueQuery.toLowerCase())));$('#work-items').innerHTML=rows.map(row).join('')||'<p class="mute">Tidak ada issue sesuai filter.</p>';}};
 $('#view').onclick=async e=>{
   const c=e.target.closest('[data-chip]');if(c){S.filter=c.dataset.chip;return drawMain()}
   const bf=e.target.closest('[data-branch-filter]');if(bf){S.branchFilter=bf.dataset.branchFilter;return drawBranchPanel()}
   const b=e.target.closest('[data-act]');if(!b)return;
   const act=b.dataset.act,box=b.closest('details'),n=box&&+box.dataset.n,q=s=>box.querySelector(s),repo=S.repo;
   if(act==='branches-refresh')return refreshBranches(repo);
+  if(act==='branches-cleanup'){
+    const safe=(S.branchData?.branches||[]).filter(x=>x.safe_to_delete);
+    if(!safe.length)return note('Tidak ada branch yang terverifikasi aman dihapus.',1);
+    const names=safe.map(x=>x.name).join('\n');
+    const typed=prompt('Hapus '+safe.length+' branch yang sudah terbukti merged?\n'+names+'\n\nKetik nama repository persis: '+repo);
+    if(typed!==repo)return note('Cleanup dibatalkan.',1);
+    const r=await run('Menghapus branch aman',()=>api('/api/branches/cleanup','POST',{repo,confirm:typed}));
+    if(r){note('Terhapus: '+(r.deleted.join(', ')||'tidak ada')+(r.skipped.length?'\nDilewati: '+r.skipped.map(x=>x.name).join(', '):''));refreshBranches(repo);}
+    return;
+  }
   if(act==='branch-delete')return openBranchDelete(repo,b.dataset.branch);
   if(act==='reload')return openRepo(repo);
   if(act==='open-docker')return $('#nav-docker').click();
