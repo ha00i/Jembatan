@@ -321,6 +321,8 @@ ROUTES = {
     ("GET", "/api/branches"): lambda q, b: branch_manager.inventory(sys.modules[__name__], q["repo"]),
     ("POST", "/api/branches/delete"): lambda q, b: branch_manager.delete_remote(
         sys.modules[__name__], b["repo"], b["branch"], b["sha"]),
+    ("POST", "/api/branches/cleanup"): lambda q, b: branch_manager.cleanup_remote(
+        sys.modules[__name__], b["repo"], b["confirm"]),
     ("POST", "/api/prompt"): lambda q, b: build_prompt(b["repo"], int(b["issue"]), b.get("branch") or None,
                                                        b.get("files") or []),
     ("POST", "/api/apply"): lambda q, b: apply_patch(b["repo"], int(b["issue"]), b["reply"],
