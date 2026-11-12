@@ -56,7 +56,6 @@ class DockerActivityUIContract(unittest.TestCase):
         self.assertIn("async function refreshDeployBranches(repo)", HTML)
         self.assertIn("function renderDeployBranchChoices()", HTML)
         self.assertIn("data.qa_ready?'ready':'blocked'", HTML)
-        self.assertIn("if(data.sha)", HTML) if False else None
         self.assertIn("data.sha?' · '+data.sha.slice(0,12):' · belum tersedia'", HTML)
 
     def test_nonexistent_branch_needs_explicit_selection_and_save(self):
