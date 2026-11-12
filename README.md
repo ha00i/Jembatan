@@ -43,23 +43,38 @@ auto-merge, auto-deploy, atau klaim bahwa QA pada container existing telah
 menguji commit terbaru secara otomatis. Legacy `TEST_CMD` tidak lagi dijalankan
 saat apply patch demi mencegah tes bebas memakai Docker socket production.
 
-### Animasi aktivitas dan notifikasi
+### QA verbose realtime dan notifikasi
 
-- **Menjalankan QA / Deploy:** muncul kartu status dengan spinner, bar animasi
-  indeterminate, durasi aktual yang terus bertambah, dan penanda proses berjalan.
-  Ini bukan persentase progres atau streaming log backend.
-- **Setelah selesai:** kartu menampilkan status PASS/FAIL dan hasil teks; hasil
-  terakhir tetap terlihat meskipun panel Docker dirender ulang. Ada tombol
-  **Salin hasil**.
-- **Notifikasi:** toast sukses, gagal, informasi, dan peringatan dengan animasi
-  singkat, tombol tutup, dan aksesibilitas `prefers-reduced-motion`.
-- **Anti-duplikasi:** selama QA/deploy berlangsung, tombol tindakan mutasi
-  terkait dinonaktifkan di browser. Backend masih perlu antrean persisten dan
-  gate server-side untuk mencegah job ganda lintas tab/restart.
+- **Run QA** membuat job di backend dan langsung mengembalikan ID. Jembatan membaca
+  status job setiap sekitar 1,2 detik lalu menampilkan tahap, durasi dan
+  **stdout/stderr Docker yang benar-benar sudah keluar**. Tidak ada persentase
+  palsu; spinner dan bar indeterminate tetap digunakan saat tes berjalan.
+- **Log terminal:** scroll otomatis saat berada di posisi bawah, tetapi tidak
+  memaksa scroll kalau operator sedang membaca baris sebelumnya. Tombol
+  **Salin hasil** dapat dipakai selama QA berjalan atau setelah selesai.
+- **PASS / FAIL:** berasal dari exit status perintah QA pada container yang
+  dikonfigurasi; bukan bukti bahwa SHA branch terakhir diuji.
+- **Satu QA aktif maksimum pada satu instance Jembatan.** Job tetap dapat
+  dipantau setelah halaman Docker dimuat ulang, selama backend belum restart.
+  Riwayat maksimal 16 repository tersimpan **di memori**, bukan database.
+- **Keamanan:** profil dan nama container QA tetap di-allowlist; log maksimal
+  sekitar 64 KB terakhir dan token kontrol Jembatan yang diketahui disamarkan.
+  Jangan menulis rahasia lain pada output tes. Tidak ada akses shell bebas.
+- **Notifikasi:** toast untuk info/sukses/gagal/peringatan dengan animasi,
+  tombol tutup, reduced motion, serta kartu Docker berjarak konsisten.
 
-UI yang berubah hanya `index.html`; API Docker dan perilaku container tidak
-diubah. Uji kontrak sumber UI: `python3 -m unittest discover -s tests
--p "test_docker_ui_activity_contract.py" -v`.
+Backend baru: `POST /api/docker/qa/start`, `GET /api/docker/qa/status?repo=owner/name`.
+Endpoint QA sinkron lama tetap tersedia untuk kompatibilitas, tetapi
+dashboard menggunakan job async yang menampilkan output bertahap.
+Polling bukan SSE/WebSocket; output bisa tampak berkelompok jika proses tes
+melakukan buffering. Refresh atau restart **backend** saat QA berjalan akan
+memutus catatan pekerjaan, karena status job belum persisten.
+
+Pengujian:
+```bash
+python3 -m unittest discover -s tests -v
+python3 -m py_compile bridge.py docker_control.py qa_jobs.py
+```
 
 ## Manajemen branch (fitur baru)
 
