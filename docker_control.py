@@ -160,7 +160,7 @@ def _docker_base(app):
     return ["docker", "--host", f"ssh://{cfg['username']}@{cfg['host']}:{cfg['port']}"]
 
 
-def _command(args, timeout=20, cwd=None):
+def _command(args, timeout=20, cwd=None, on_chunk=None):
     """Bound memory for subprocess output and kill the whole QA process group on timeout."""
     env = {k: v for k, v in os.environ.items()
            if k not in ("DOCKER_HOST", "DOCKER_CONTEXT", "GITHUB_TOKEN", "ADMIN_TOKEN", "TEST_CMD")}
@@ -186,6 +186,8 @@ def _command(args, timeout=20, cwd=None):
                         selector.unregister(key.fileobj)
                     else:
                         output = (output + chunk)[-65536:]
+                        if on_chunk:
+                            on_chunk(chunk.decode("utf-8", errors="replace"))
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise subprocess.TimeoutExpired(args, timeout)
@@ -213,8 +215,10 @@ def _command(args, timeout=20, cwd=None):
     return out
 
 
-def _docker(app, *args, timeout=20, cwd=None):
-    return _command([*_docker_base(app), *args], timeout=timeout, cwd=cwd)
+def _docker(app, *args, timeout=20, cwd=None, on_chunk=None):
+    if on_chunk is None:
+        return _command([*_docker_base(app), *args], timeout=timeout, cwd=cwd)
+    return _command([*_docker_base(app), *args], timeout=timeout, cwd=cwd, on_chunk=on_chunk)
 
 
 def connection_test(app):
@@ -239,12 +243,14 @@ def containers(app):
     return {"containers": result[:150]}
 
 
-def run_qa(app, repo):
+def run_qa(app, repo, on_event=None):
     mapping = _app_settings(app, repo)
     name, profile = mapping["qa_container"], mapping["qa_profile"]
     if not name or profile not in QA_PROFILES or not QA_NAME_RE.search(name):
         raise DockerError("Atur container QA khusus dan profil tes dahulu", 409)
     # A name alone is not proof of isolation; do not use privileged/host-network targets.
+    if on_event:
+        on_event("stage", "Memeriksa keamanan container QA")
     proof = _docker(app, "inspect", "--format",
                     "{{.State.Running}}|{{.HostConfig.Privileged}}|{{.HostConfig.NetworkMode}}",
                     name, timeout=12).split("|")
@@ -252,8 +258,15 @@ def run_qa(app, repo):
         raise DockerError("Container QA tidak running atau konfigurasi isolasinya tidak memenuhi syarat", 409)
     # No input-defined shell/argv: fixed profile prevents remote command injection.
     command = QA_PROFILES[profile][1]
+    if on_event:
+        on_event("stage", "Menjalankan " + QA_PROFILES[profile][0])
+        on_event("output", "[Jembatan] Container: " + name + "\n[Jembatan] Profil: " + profile + "\n[Jembatan] Perintah: " + " ".join(command) + "\n\n")
     try:
-        out = _docker(app, "exec", name, *command, timeout=300)
+        if on_event:
+            out = _docker(app, "exec", name, *command, timeout=300,
+                          on_chunk=lambda text: on_event("output", text))
+        else:
+            out = _docker(app, "exec", name, *command, timeout=300)
         return {"repo": repo, "container": name, "profile": profile,
                 "ok": True, "output": out[-8000:]}
     except DockerError as e:
