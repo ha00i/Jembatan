@@ -197,7 +197,7 @@ class DockerControlTests(unittest.TestCase):
         folder = Path(self.tmp.name) / "wrong-branch"
         folder.mkdir()
         (folder / ".git").mkdir()
-        (folder / "compose.yaml").write_text("services: {}\\n")
+        (folder / "compose.yaml").write_text("services: {}\n")
         ctl.save_app(self.app, {"repo": "ha00i/Jembatan", "deploy_path": str(folder)})
         with patch.object(ctl, "_command", side_effect=[
             "https://github.com/ha00i/Jembatan", "staging"
@@ -211,7 +211,7 @@ class DockerControlTests(unittest.TestCase):
         folder = Path(self.tmp.name) / "changed-sha"
         folder.mkdir()
         (folder / ".git").mkdir()
-        (folder / "compose.yaml").write_text("services: {}\\n")
+        (folder / "compose.yaml").write_text("services: {}\n")
         ctl.save_app(self.app, {"repo": "ha00i/Jembatan", "deploy_path": str(folder)})
         with patch.object(ctl, "_command", side_effect=[
             "https://github.com/ha00i/Jembatan", "main", "", "", "b" * 40
@@ -238,7 +238,7 @@ class DockerControlTests(unittest.TestCase):
         ctl.save_app(self.app, {"repo": "ha00i/Jembatan",
                                 "deploy_path": "/srv/my project"})
         with patch.object(ctl, "_command",
-                          return_value='deployed\\n--JEMBATAN-COMPOSE-PS--\\n{"State":"running","Health":"healthy"}') as runner:
+                          return_value='deployed\n--JEMBATAN-COMPOSE-PS--\n{"State":"running","Health":"healthy"}') as runner:
             result = ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan", "main", SHA)
         cmd = runner.call_args.args[0]
         self.assertIn("StrictHostKeyChecking=yes", cmd)
