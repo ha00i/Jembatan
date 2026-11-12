@@ -43,6 +43,14 @@ class DockerActivityUIContract(unittest.TestCase):
         self.assertIn("Progres waktu nyata tanpa persentase buatan", HTML)
         self.assertIn("aria-label=\"Verbose log Docker QA\"", HTML)
 
+    def test_deploy_readiness_is_sha_bound_in_ui(self):
+        self.assertIn("deploy_branch:$('#docker-deploy-branch').value", HTML)
+        self.assertIn("id=\"deploy-ready-label\"", HTML)
+        self.assertIn("refreshDeployReadiness(repo)", HTML)
+        self.assertIn("/api/deploy/readiness?repo=", HTML)
+        self.assertIn("SHA belum terverifikasi", HTML)
+        self.assertIn("r?.health_verified", HTML)
+
     def test_toasts_are_actionable_and_accessible(self):
         self.assertIn('id="toast-stack" aria-label="Notifikasi aktivitas"', HTML)
         self.assertIn('class="notice-close" aria-label="Tutup notifikasi"', HTML)
