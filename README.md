@@ -1,5 +1,27 @@
 # Jembatan
 
+## Branding Jembatan
+
+Identitas visual baru menggunakan siluet jembatan dan node alur kerja
+dengan warna **indigo, biru, cyan, dan teal**.
+
+- `assets/jembatan-mark.svg`: ikon untuk sidebar, topbar, dan favicon.
+- `assets/jembatan-lockup.svg`: logo horizontal pada halaman awal.
+- `index.html`: palet, typografi, spacing, card, dan tampilan mobile yang
+  selaras dengan identitas baru.
+- `bridge.py`: dua rute aset publik yang eksplisit, bukan direktori statis
+  terbuka. `Dockerfile` membundel folder `assets/`.
+
+Tidak ada perubahan pada mekanisme GitHub, pemeriksaan QA, gate deploy, maupun
+perintah Compose. Kedua SVG dapat digunakan tanpa memasang font eksternal.
+Untuk memeriksa integrasi branding:
+
+```bash
+python3 -m unittest discover -s tests -p "test_brand_assets.py" -v
+sudo docker compose up -d --build jembatan
+```
+
+
 Alat bantu ChatGPT dan GitHub di servermu. Tanpa API berbayar: kamu yang menempel prompt ke
 chat ChatGPT dan menempel balasannya kembali. Sisanya otomatis.
 
