@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+<title id="title">Jembatan</title><desc id="desc">Jembatan penghubung alur GitHub, QA, dan deployment</desc>
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#295BFF"/><stop offset=".51" stop-color="#11A4DA"/><stop offset="1" stop-color="#20D5A8"/></linearGradient><linearGradient id="a" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#112665"/><stop offset="1" stop-color="#1D6CE5"/></linearGradient></defs>
+<rect x="8" y="8" width="240" height="240" rx="62" fill="#0D1738"/>
+<circle cx="52" cy="77" r="11" fill="#296AFF"/><circle cx="104" cy="48" r="11" fill="#1F95E9"/><circle cx="154" cy="48" r="11" fill="#12B7CE"/><circle cx="206" cy="77" r="11" fill="#20D5A8"/>
+<path d="M52 77Q128-3 206 77" fill="none" stroke="url(#g)" stroke-width="7" stroke-linecap="round"/>
+<circle cx="52" cy="77" r="4.5" fill="#fff"/><circle cx="104" cy="48" r="4.5" fill="#fff"/><circle cx="154" cy="48" r="4.5" fill="#fff"/><circle cx="206" cy="77" r="4.5" fill="#fff"/>
+<path d="M40 191Q128 128 216 191" fill="none" stroke="url(#g)" stroke-width="15" stroke-linecap="round"/>
+<path d="M57 186Q128 140 199 186" fill="none" stroke="#A4F7E9" stroke-width="4" opacity=".8"/>
+<path d="M79 108h27v58H79z M150 108h27v58h-27z" fill="url(#a)"/>
+<path d="M83 111h7v57h-7 M154 111h7v57h-7" fill="#4BAEFF" opacity=".85"/>
+<path d="M97 118Q128 147 163 118" stroke="url(#g)" stroke-width="6" fill="none"/>
+<path d="M48 173Q79 146 91 118 M165 118Q183 146 208 173" stroke="url(#g)" stroke-width="6" fill="none"/>
+<path d="M112 131v24 M128 139v12 M143 131v24 M68 155v21 M189 156v21" stroke="#46C8EF" stroke-width="4" stroke-linecap="round"/>
+<path d="M40 210h176" stroke="#263A74" stroke-width="4" stroke-linecap="round"/>
+</svg>
