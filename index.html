@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jembatan</title>
+<style>
+:root{--ink:#1B2430;--paper:#EDF0F2;--card:#fff;--line:#D3D9E0;--mute:#5D6B7A;--accent:#1F5F8B;--none:#8A94A0;--ready:#1F5F8B;--merged:#6B4FA3;--done:#2E7D4F;--bad:#B3392F;--code:#F3F5F7}
+@media (prefers-color-scheme:dark){:root{--ink:#E4E9EE;--paper:#141A21;--card:#1C242D;--line:#2E3946;--mute:#93A1B0;--accent:#6DB3E3;--none:#74808D;--ready:#6DB3E3;--merged:#B79CF0;--done:#5CC38A;--bad:#F08A80;--code:#242E39}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+code,pre,textarea{font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--card);border-radius:6px;padding:6px 12px}
+button:hover{border-color:var(--accent)}
+button.go{background:var(--accent);border-color:var(--accent);color:var(--card);font-weight:600}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input,select,textarea{border:1px solid var(--line);background:var(--card);border-radius:6px;padding:6px 8px}
+textarea{width:100%;resize:vertical}
+.app{display:grid;grid-template-columns:310px 1fr;min-height:100vh}
+aside{border-right:1px solid var(--line);padding:18px 16px;background:var(--card);display:flex;flex-direction:column;gap:12px;max-height:100vh;position:sticky;top:0}
+h1{margin:0;font-size:22px;letter-spacing:-.02em}
+.sub{margin:0;color:var(--mute);font-size:13px}
+.row{display:flex;gap:6px}.row>input{flex:1;min-width:0}
+#repos{list-style:none;margin:0;padding:0;overflow:auto;flex:1}
+#repos li{display:flex;gap:6px;align-items:flex-start;padding:3px 0}
+#repos input{margin-top:9px}
+.repo{flex:1;text-align:left;border-color:transparent;background:none;display:flex;flex-direction:column;overflow-wrap:anywhere}
+.repo.on{background:var(--paper);border-color:var(--line)}
+.repo small{color:var(--mute)}
+main{padding:22px 26px;min-width:0}
+#note{white-space:pre-line;font-size:13px;color:var(--mute);min-height:20px}#note.bad{color:var(--bad)}
+.head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.head h2{margin:0;font-size:20px;overflow-wrap:anywhere}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+.chip[aria-pressed=true]{background:var(--ink);color:var(--card);border-color:var(--ink)}
+details.is{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--none);border-radius:6px;margin-bottom:8px}
+details.is.ready{border-left-color:var(--ready)}details.is.merged_open{border-left-color:var(--merged)}details.is.done{border-left-color:var(--done)}
+summary{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:center;padding:10px 12px;cursor:pointer;list-style:none}
+summary::-webkit-details-marker{display:none}
+.n{color:var(--mute)}.t{overflow-wrap:anywhere}
+.bar{display:flex;gap:3px}.bar i{width:22px;height:6px;border-radius:3px;background:var(--line)}
+.is.none .bar i.on{background:var(--none)}.is.ready .bar i.on{background:var(--ready)}.is.merged_open .bar i.on{background:var(--merged)}.is.done .bar i.on{background:var(--done)}
+.l{grid-column:2/4;font-size:13px;color:var(--mute)}
+.body{padding:4px 14px 14px;display:grid;gap:10px;border-top:1px solid var(--line)}
+.body ul{margin:6px 0;padding-left:18px}
+pre{background:var(--code);border-radius:6px;padding:10px;overflow:auto;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.mute{color:var(--mute)}.bad{color:var(--bad)}
+h3{margin:18px 0 6px;font-size:16px}
+[hidden]{display:none!important}
+@media (max-width:820px){.app{grid-template-columns:1fr}aside{position:static;max-height:none;border-right:0;border-bottom:1px solid var(--line)}#repos{max-height:240px}main{padding:16px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <div><h1>Jembatan</h1><p class="sub">Menghubungkan repo GitHub, chat ChatGPT, dan Docker di servermu.</p></div>
+  <div class="row"><input id="tok" type="password" placeholder="GitHub token" autocomplete="current-password" aria-label="GitHub token"><button id="login" class="go">Masuk</button></div>
+  <input id="q" placeholder="Cari repo" aria-label="Cari repo">
+  <div class="row"><button id="all">Pilih semua</button><button id="sync" class="go">Sinkron terpilih</button></div>
+  <ul id="repos"></ul>
+</aside>
+<main>
+  <div id="note" role="status" aria-live="polite"></div>
+  <div id="view"><p class="mute">Masukkan GitHub token yang sama dengan di server, lalu pilih repo di kiri. Repo yang belum tersinkron perlu dicentang dan disinkron dulu.</p></div>
+</main>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ST={none:['Belum ada pekerjaan',1],ready:['Ada commit di branch, siap ditinjau dan merge',2],merged_open:['Sudah masuk ke branch utama, issue masih terbuka',3],done:['Selesai (issue ditutup)',4]};
+let tok=localStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},filter:'all'};
+$('#tok').value=tok;
+
+async function api(p,m='GET',b){
+  const r=await fetch(p,{method:m,headers:{'X-Admin-Token':tok,'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});
+  const j=await r.json().catch(()=>({error:'Respons tidak valid'}));
+  if(!r.ok)throw new Error(j.error||r.statusText);return j;
+}
+const note=(t,bad)=>{const n=$('#note');n.textContent=t;n.className=bad?'bad':''};
+async function run(label,fn){note(label+'...');try{const r=await fn();note('');return r}catch(e){note(e.message,1)}}
+function copy(el){el.select();try{navigator.clipboard.writeText(el.value)}catch(_){document.execCommand('copy')}}
+
+$('#login').onclick=()=>{tok=$('#tok').value.trim();localStorage.setItem('jb-token',tok);loadRepos()};
+$('#q').oninput=drawRepos;
+$('#all').onclick=()=>document.querySelectorAll('#repos input').forEach(i=>i.checked=true);
+$('#sync').onclick=async()=>{
+  const rs=[...document.querySelectorAll('#repos input:checked')].map(i=>i.dataset.r);
+  if(!rs.length)return note('Centang repo dulu.',1);
+  const r=await run('Sinkron '+rs.length+' repo',()=>api('/api/sync','POST',{repos:rs}));
+  if(r){await loadRepos();note(Object.entries(r).map(([k,v])=>k+': '+v).join('\n'),Object.values(r).some(v=>v!=='ok'))}
+};
+async function loadRepos(){const r=await run('Memuat repo',()=>api('/api/repos'));if(r){S.repos=r;drawRepos()}}
+function drawRepos(){
+  const q=$('#q').value.toLowerCase();
+  $('#repos').innerHTML=S.repos.filter(r=>r.name.toLowerCase().includes(q)).map(r=>
+   `<li><input type="checkbox" data-r="${esc(r.name)}" aria-label="Centang ${esc(r.name)}"><button class="repo${S.repo===r.name?' on':''}" data-open="${esc(r.name)}">${esc(r.name)}<small>${r.synced?'sudah tersinkron':'belum tersinkron'}${r.private?', privat':''}</small></button></li>`).join('');
+}
+$('#repos').onclick=e=>{const b=e.target.closest('[data-open]');if(b)openRepo(b.dataset.open)};
+
+async function openRepo(n){
+  S.repo=n;S.filter='all';drawRepos();
+  const d=await run('Membaca branch dan issue',()=>api('/api/overview?repo='+encodeURIComponent(n)));
+  if(d){S.data=d;drawMain()}
+}
+function drawMain(){
+  const d=S.data,cnt=k=>d.issues.filter(i=>i.status===k).length;
+  const chips=[['all','Semua',d.issues.length],...Object.entries(ST).map(([k,v])=>[k,v[0].split(',')[0],cnt(k)])];
+  const list=d.issues.filter(i=>S.filter==='all'||i.status===S.filter);
+  $('#view').innerHTML=`
+   <div class="head"><h2>${esc(d.repo)} <span class="mute">(utama: ${esc(d.base)})</span></h2>
+    <div class="row"><button data-act="reload">Muat ulang</button><button data-act="deploy">Deploy dengan Docker</button></div></div>
+   <pre id="deploy-out" hidden></pre>
+   <div class="chips">${chips.map(([k,l,c])=>`<button class="chip" data-chip="${k}" aria-pressed="${S.filter===k}">${esc(l)}: ${c}</button>`).join('')}</div>
+   ${list.map(row).join('')||'<p class="mute">Tidak ada issue di kelompok ini.</p>'}
+   <h3>Branch yang tidak menyebut issue apa pun</h3>
+   ${d.orphans.length?`<ul>${d.orphans.map(b=>`<li><code>${esc(b.name)}</code>: ${b.ahead} commit di depan, ${b.behind} tertinggal${b.merged?', sudah masuk':''} (${esc(b.date)})</li>`).join('')}</ul>`:'<p class="mute">Tidak ada.</p>'}`;
+}
+function row(i){
+  const [lbl,k]=ST[i.status],open=S.open===i.number?' open':'';
+  const opts=i.branches.map(b=>`<option value="${esc(b.name)}">${esc(b.name)}</option>`).join('');
+  return `<details class="is ${i.status}" data-n="${i.number}"${open}>
+   <summary><span class="n">#${i.number}</span><span class="t">${esc(i.title)}</span>
+    <span class="bar" title="${esc(lbl)}">${[1,2,3,4].map(x=>`<i${x<=k?' class="on"':''}></i>`).join('')}</span><span class="l">${esc(lbl)}</span></summary>
+   <div class="body">
+    <p><a href="${esc(i.url)}" target="_blank" rel="noopener">Buka issue di GitHub</a></p>
+    ${i.branches.length?`<ul>${i.branches.map(b=>`<li><code>${esc(b.name)}</code>: ${b.ahead} commit di depan, ${b.behind} tertinggal${b.merged?', sudah masuk':''} (${esc(b.date)})</li>`).join('')}</ul>`:'<p class="mute">Belum ada branch atau commit yang menyebut issue ini.</p>'}
+    ${i.merge_cmd?`<label>Perintah merge (jalankan setelah ditinjau dan test lolos)<textarea rows="3" readonly data-merge>${esc(i.merge_cmd)}</textarea></label><div><button data-act="copy" data-sel="[data-merge]">Salin perintah merge</button></div>`:''}
+    <div class="row"><select data-br aria-label="Branch yang disertakan"><option value="">Tanpa branch (hanya issue dan daftar file)</option>${opts}</select><input data-files placeholder="File tambahan, pisahkan koma"></div>
+    <div><button class="go" data-act="prompt">Buat prompt untuk ChatGPT</button></div>
+    <div data-p hidden><textarea rows="8" readonly data-prompt></textarea><button data-act="copy" data-sel="[data-prompt]">Salin prompt</button></div>
+    <label>Balasan ChatGPT<textarea rows="6" data-reply placeholder="Tempel balasan lengkap, termasuk blok diff"></textarea></label>
+    <div><button class="go" data-act="apply">Terapkan dan uji</button></div>
+    <pre data-res hidden></pre>
+    <div data-f hidden><textarea rows="6" readonly data-follow></textarea><button data-act="copy" data-sel="[data-follow]">Salin prompt lanjutan</button></div>
+    <div data-push hidden><button class="go" data-act="push">Push dan buat PR</button></div>
+   </div></details>`;
+}
+$('#view').onclick=async e=>{
+  const c=e.target.closest('[data-chip]');if(c){S.filter=c.dataset.chip;return drawMain()}
+  const b=e.target.closest('[data-act]');if(!b)return;
+  const act=b.dataset.act,box=b.closest('details'),n=box&&+box.dataset.n,q=s=>box.querySelector(s),repo=S.repo;
+  if(act==='reload')return openRepo(repo);
+  if(act==='copy')return copy(q(b.dataset.sel));
+  if(act==='deploy'){
+    if(!confirm('Deploy '+repo+' dari branch utama dengan docker compose up -d --build?'))return;
+    const r=await run('Deploy',()=>api('/api/deploy','POST',{repo}));
+    if(r){const o=$('#deploy-out');o.hidden=false;o.textContent=r.output||'Selesai.'}return;
+  }
+  if(act==='prompt'){
+    const files=q('[data-files]').value.split(',').map(s=>s.trim()).filter(Boolean);
+    const r=await run('Menyusun prompt',()=>api('/api/prompt','POST',{repo,issue:n,branch:q('[data-br]').value,files}));
+    if(r){q('[data-p]').hidden=false;const t=q('[data-prompt]');t.value=r.prompt;copy(t);note('Prompt siap ('+r.chars+' karakter) dan sudah disalin. Tempel ke ChatGPT.')}return;
+  }
+  if(act==='apply'){
+    const r=await run('Menerapkan patch dan menguji',()=>api('/api/apply','POST',{repo,issue:n,reply:q('[data-reply]').value,branch:S.applied[n]}));
+    if(!r)return;S.applied[n]=r.branch;S.open=n;
+    const res=q('[data-res]');res.hidden=false;
+    res.textContent='Branch '+r.branch+' (commit '+r.commit+')\n'+(r.test?(r.test.ok?'Test lolos.':'Test GAGAL.')+'\n'+r.test.output:'TEST_CMD belum diatur, jadi tidak ada test otomatis.');
+    q('[data-push]').hidden=!(r.test?r.test.ok:true);
+    q('[data-f]').hidden=!r.followup;if(r.followup)q('[data-follow]').value=r.followup;return;
+  }
+  if(act==='push'){
+    if(!confirm('Push '+S.applied[n]+' ke GitHub dan buat PR?'))return;
+    const r=await run('Push dan membuat PR',()=>api('/api/push','POST',{repo,issue:n,branch:S.applied[n]}));
+    if(r)q('[data-res]').textContent+='\n\n'+(r.pr?'PR: '+r.pr:'Sudah di-push, tetapi PR gagal dibuat: '+r.error);
+  }
+};
+if(tok)loadRepos();
+</script>
+</body>
+</html>

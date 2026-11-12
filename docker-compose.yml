@@ -1,0 +1,16 @@
+services:
+  jembatan:
+    build: .
+    restart: unless-stopped
+    ports: ["5111:5111"]
+    environment:
+      HOST: 0.0.0.0
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      WORKDIR: /srv/jembatan/repos
+      TEST_CMD: ${TEST_CMD:-}
+      DEPLOY_MAP: ${DEPLOY_MAP:-}
+    volumes:
+      # Path di host dan di kontainer HARUS sama, supaya docker compose milik repo
+      # (lewat docker.sock) menemukan file-nya.
+      - /srv/jembatan/repos:/srv/jembatan/repos
+      - /var/run/docker.sock:/var/run/docker.sock
