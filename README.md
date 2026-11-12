@@ -17,14 +17,31 @@ chat ChatGPT dan menempel balasannya kembali. Sisanya otomatis.
    Ini tebakan dari nama branch, pesan commit (`#12`), dan status issue. Bukan pengganti review.
 3. Buka issue, Buat prompt untuk ChatGPT, tempel ke chat. Balasan berformat
    STATUS / KEKURANGAN / PATCH.
-4. Tempel balasan, Terapkan dan uji. Patch masuk ke branch baru `bridge/issue-N-...`.
-   Bila test gagal, ada prompt lanjutan untuk ditempel ke chat yang sama.
+4. Tempel balasan, Terapkan patch. Patch masuk ke branch baru `bridge/issue-N-...`.
+   Jalankan QA secara terpisah melalui menu Docker & QA; tes tidak otomatis pada production.
    Jika patch tidak cocok dengan kode terbaru (misalnya `git apply gagal: patch failed: ...php:165`),
    Jembatan akan menampilkan **notifikasi peringatan di pojok kanan bawah**. Notifikasi memuat
    lokasi konflik, panel detail error, tombol **Salin detail** untuk dikirim ke ChatGPT,
    serta tombol tutup. Notifikasi tetap tampil sampai pengguna menutupnya.
 5. Push dan buat PR. Setelah ditinjau, pakai perintah merge yang ditampilkan.
-6. Deploy dengan Docker menjalankan `docker compose up -d --build` dari branch utama.
+6. Deploy hanya dari **folder Compose yang dipetakan untuk repository**, setelah konfirmasi nama repo; jangan jalankan deploy ke semua container.
+
+## Docker & QA — alur sederhana (fitur baru)
+
+Menu utama **Repositories & Issues** dan **Docker & QA**.
+Pada Docker & QA kamu bisa:
+- Memilih **Docker lokal** (socket sudah di-mount) atau **Remote SSH** (host, username, port, SSH key + known_hosts).
+- Klik **Simpan koneksi**, **Tes koneksi**, **Lihat container**.
+- Pilih repository, mapping **container QA** + **profil tes tetap** + **path Compose** aplikasi; klik **Run QA** atau **Deploy** setelah konfirmasi.
+- QA tidak boleh memakai container production; backend hanya menerima container yang namanya menunjukkan QA, running, non-privileged, dan bukan host-network. Pastikan database/volume juga memang terpisah.
+- Deployment hanya pada path mapping yang telah disetujui, bukan semua repo atau branch.
+- **Satu issue → satu branch tetap** `bridge/issue-N`, PR terbuka dipakai kembali, issue closed tersembunyi kecuali dibuka.
+- Untuk branch lama yang sudah merged: tombol **Hapus semua branch aman** dengan konfirmasi nama repository dan verifikasi SHA ulang.
+
+Baca [panduan Docker & QA](docs/SIMPLE-DOCKER-QA.md). Tidak ada API AI berbayar,
+auto-merge, auto-deploy, atau klaim bahwa QA pada container existing telah
+menguji commit terbaru secara otomatis. Legacy `TEST_CMD` tidak lagi dijalankan
+saat apply patch demi mencegah tes bebas memakai Docker socket production.
 
 ## Manajemen branch (fitur baru)
 
