@@ -103,6 +103,8 @@ class BranchSafetyTests(unittest.TestCase):
         self.assertTrue(row["safe_to_delete"])
         self.assertEqual(row["merged_into"][0]["name"], "main")
         self.assertEqual(row["merged_into"][0]["evidence"], "ancestry")
+        self.assertEqual(row["ahead"], 2)
+        self.assertEqual(row["behind"], 1)
 
     def test_exact_sha_merged_pr_into_main_is_safe(self):
         self.app.closed_prs = [pr(12)]
