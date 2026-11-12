@@ -121,7 +121,7 @@ class DockerControlTests(unittest.TestCase):
         (folder / ".git").mkdir()
         (folder / "compose.yaml").write_text("services: {}\n")
         ctl.save_app(self.app, {"repo": "ha00i/Jembatan", "deploy_path": str(folder)})
-        with patch.object(ctl, "_command", side_effect=["https://github.com/ha00i/Jembatan.git", "updated"]) as git:
+        with patch.object(ctl, "_command", side_effect=["https://github.com/ha00i/Jembatan.git", "", "updated"]) as git:
             with patch.object(ctl, "_docker", side_effect=["created", "healthy"]) as dock:
                 result = ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan")
         self.assertTrue(result["ok"])
@@ -141,6 +141,28 @@ class DockerControlTests(unittest.TestCase):
                 with self.assertRaisesRegex(ctl.DockerError, "tidak cocok"):
                     ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan")
                 dock.assert_not_called()
+
+    def test_dirty_deploy_checkout_is_rejected(self):
+        folder = Path(self.tmp.name) / "dirty-app"
+        folder.mkdir()
+        (folder / ".git").mkdir()
+        (folder / "compose.yaml").write_text("services: {}\n")
+        ctl.save_app(self.app, {"repo": "ha00i/Jembatan", "deploy_path": str(folder)})
+        with patch.object(ctl, "_command", side_effect=["git@github.com:ha00i/Jembatan.git", " M compose.yaml"]):
+            with patch.object(ctl, "_docker") as docker:
+                with self.assertRaisesRegex(ctl.DockerError, "perubahan lokal"):
+                    ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan")
+                docker.assert_not_called()
+
+    def test_fake_github_host_is_rejected(self):
+        folder = Path(self.tmp.name) / "fake-origin"
+        folder.mkdir()
+        (folder / ".git").mkdir()
+        (folder / "compose.yaml").write_text("services: {}\n")
+        ctl.save_app(self.app, {"repo": "ha00i/Jembatan", "deploy_path": str(folder)})
+        with patch.object(ctl, "_command", return_value="https://fakegithub.com/ha00i/Jembatan"):
+            with self.assertRaisesRegex(ctl.DockerError, "tidak cocok"):
+                ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan")
 
     def test_connection_only_checks_read_only_info(self):
         with patch.object(ctl, "_docker", return_value="27.4|2|mail") as dock:
