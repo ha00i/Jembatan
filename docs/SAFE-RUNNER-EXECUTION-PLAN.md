@@ -10,7 +10,7 @@
 
 ### Status S0 terkini (tooling)
 
-Pengumpul sampel read-only `scripts/s0_prod_audit.py`, 14 unit test sintetis dan panduan
+Pengumpul sampel read-only `scripts/s0_prod_audit.py`, 15 unit test sintetis dan panduan
 [S0-PRODUCTION-SURVEY.md](S0-PRODUCTION-SURVEY.md) telah ditambahkan pada fase S0.
 **Baseline 24 jam pada server production asli belum dijalankan atau diverifikasi**.
 Semua jalur QA tetap nonaktif; lanjut ke S1/S2 hanya setelah survei host dan persetujuan operator.
