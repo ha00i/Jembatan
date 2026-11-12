@@ -688,10 +688,12 @@ async function pollQaStatus(repo){
     if(job.state==='passed'||job.state==='failed'){
       S.qaLive=job;
       const ok=job.state==='passed';
-      const title=ok?'QA PASS':'QA FAIL';
+      const title=ok?(job.qa_verified?'QA PASS · SHA terverifikasi':'QA PASS · SHA belum terverifikasi'):'QA FAIL';
       const log=(job.log||'')+(job.truncated?'\n[Jembatan] Hanya 64 KB output terakhir yang disimpan.':'');
       if(S.dockerOperation?.kind==='qa'&&S.dockerOperation.repo===repo){
-        finishDockerOperation(ok,title,ok?'Tes container QA selesai. Periksa log; commit SHA terbaru belum otomatis dibuktikan.':'Tes pada container QA gagal. Baca baris error untuk memperbaiki tes.',log);
+        finishDockerOperation(ok,title,ok?(job.qa_verified?
+          'QA PASS dan commit QA cocok dengan branch GitHub saat pengujian. Tetap periksa kesiapan deploy untuk SHA terbaru.':
+          'Tes PASS, tetapi sumber commit belum terverifikasi: '+(job.verify_reason||'tidak ada bukti SHA')+'. Deploy akan diblokir.'):'Tes pada container QA gagal. Baca baris error untuk memperbaiki tes.',log);
         notify(ok?'Tes pada container QA lulus.':'Tes pada container QA gagal. Lihat verbose log.',ok?'success':'error',title);
       }else if(!S.dockerOperation){
         S.dockerResult={kind:'qa',repo,ok,title,description:'Hasil QA terakhir dari server. Output bukan bukti SHA commit terbaru.',elapsed:durationLabel(Number(job.started_at)*1000),output:log};
