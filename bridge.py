@@ -448,6 +448,14 @@ class H(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         if method == "GET" and u.path == "/":
             return self.reply(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
+        # Only serve explicit packaged brand assets; never expose arbitrary files.
+        brand_assets = {
+            "/assets/jembatan-mark.svg": "jembatan-mark.svg",
+            "/assets/jembatan-lockup.svg": "jembatan-lockup.svg",
+        }
+        if method == "GET" and u.path in brand_assets:
+            return self.reply(200, (HERE / "assets" / brand_assets[u.path]).read_bytes(),
+                              "image/svg+xml; charset=utf-8")
         fn = ROUTES.get((method, u.path))
         if not fn:
             return self.reply(404, {"error": "Tidak ditemukan"})
