@@ -317,40 +317,119 @@ def _deploy_dir(app, repo):
     return path
 
 
-def deploy(app, repo, confirm):
+def _compose_health(raw):
+    """Verify Compose service health where Docker provides healthchecks."""
+    try:
+        parsed = json.loads(raw)
+        rows = parsed if isinstance(parsed, list) else [parsed]
+    except ValueError:
+        try:
+            rows = [json.loads(line) for line in raw.splitlines() if line.strip()]
+        except ValueError:
+            rows = []
+    if not rows or any(not isinstance(row, dict) for row in rows):
+        return "unverified"
+    unverified = False
+    for row in rows:
+        state = str(row.get("State", "")).lower()
+        health = str(row.get("Health", "")).lower()
+        if state != "running" or health == "unhealthy":
+            return "unhealthy"
+        if health != "healthy":
+            unverified = True
+    return "unverified" if unverified else "healthy"
+
+
+def _repo_origin(repo):
+    return {f"https://github.com/{repo}", f"git@github.com:{repo}",
+            f"ssh://git@github.com/{repo}"}
+
+
+def deploy(app, repo, confirm, branch=None, expected_sha=None):
+    """No deploy without validated QA evidence passed in by bridge.deploy."""
     if not isinstance(repo, str) or not REPO_RE.fullmatch(repo) or confirm != repo:
         raise DockerError("Konfirmasi deploy harus nama repository persis", 409)
+    item = _app_settings(app, repo)
+    if branch not in ("main", "staging") or item["deploy_branch"] != branch:
+        raise DockerError("Branch target deployment tidak sesuai pengaturan", 409)
+    if not isinstance(expected_sha, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", expected_sha):
+        raise DockerError("Bukti QA dan SHA target diperlukan sebelum deploy", 409)
     path = _deploy_dir(app, repo)
     cfg = load(app)
+
     if cfg["mode"] == "local":
         directory = Path(path)
         if not directory.is_dir() or not (directory / ".git").exists():
             raise DockerError("Folder deploy tidak tersedia di container Jembatan. Mount folder ini terlebih dahulu.", 409)
-        if not any((directory / name).is_file() for name in ("compose.yaml", "compose.yml", "docker-compose.yml", "docker-compose.yaml")):
+        if not any((directory / name).is_file() for name in
+                   ("compose.yaml", "compose.yml", "docker-compose.yml", "docker-compose.yaml")):
             raise DockerError("Compose file tidak ditemukan pada folder deploy", 409)
-        # Prevent accidentally deploying a different repository through a mapped path.
         origin = _command(["git", "remote", "get-url", "origin"], timeout=12, cwd=directory).strip()
         normalized = origin.rstrip("/").removesuffix(".git")
-        allowed_origins = {f"https://github.com/{repo}", f"git@github.com:{repo}",
-                           f"ssh://git@github.com/{repo}"}
-        if normalized not in allowed_origins:
+        if normalized not in _repo_origin(repo):
             raise DockerError("Remote Git pada folder deploy tidak cocok dengan repository terpilih", 409)
+        current = _command(["git", "branch", "--show-current"], timeout=12, cwd=directory).strip()
+        if current != branch:
+            raise DockerError(f"Branch aktif '{current or 'detached'}' berbeda dari target '{branch}'. "
+                              "Pilih checkout yang benar secara manual terlebih dahulu.", 409)
         dirty = _command(["git", "status", "--porcelain"], timeout=12, cwd=directory)
         if dirty:
             raise DockerError("Folder deploy memiliki perubahan lokal; periksa dahulu sebelum deploy", 409)
-        # no fallback to arbitrary source/branch; deploy path explicitly configured
-        _command(["git", "pull", "--ff-only"], timeout=180, cwd=directory)
+
+        # Fetch exact remote branch before pull. All checks happen before Docker build.
+        _command(["git", "fetch", "--no-tags", "origin", f"refs/heads/{branch}"],
+                 timeout=180, cwd=directory)
+        observed = _command(["git", "rev-parse", "--verify", "FETCH_HEAD"],
+                            timeout=12, cwd=directory).strip()
+        if observed != expected_sha:
+            raise DockerError("Commit GitHub berubah setelah QA. Jalankan QA ulang untuk SHA terbaru.", 409)
+        _command(["git", "pull", "--ff-only", "origin", branch], timeout=180, cwd=directory)
+        pulled = _command(["git", "rev-parse", "--verify", "HEAD"], timeout=12, cwd=directory).strip()
+        if pulled != expected_sha:
+            raise DockerError("SHA checkout setelah pull tidak cocok. Build dibatalkan.", 409)
+
         output = _docker(app, "compose", "up", "-d", "--build", timeout=1200, cwd=directory)
-        status = _docker(app, "compose", "ps", timeout=30, cwd=directory)
+        status = _docker(app, "compose", "ps", "--format", "json", timeout=30, cwd=directory)
     else:
         _validate_connection(cfg["mode"], cfg["host"], cfg["username"], cfg["port"])
         import shlex
-        # execute only fixed allowlisted deployment command, with quoted absolute path
-        quoted = shlex.quote(path)
-        script = f"cd -- {quoted} && git pull --ff-only && docker compose up -d --build && docker compose ps"
-        output = _command(["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
-                           "-p", str(cfg["port"]), f"{cfg['username']}@{cfg['host']}",
-                           "sh -lc " + shlex.quote(script)], timeout=1200)
-        status = "Status tercantum pada output deploy remote."
-    return {"repo": repo, "path": path, "ok": True, "output": output[-8000:],
-            "status": status[-4000:]}
+        q = shlex.quote
+        allowed = " ".join(q(origin) for origin in _repo_origin(repo))
+        # No unreviewed shell command comes from the UI. Values are validated
+        # repo, main/staging, SHA and quote-escaped mapped absolute directory.
+        script = (
+            "set -eu; cd -- " + q(path) + "; "
+            "origin=$(git remote get-url origin); "
+            "case \\"$origin\\" in " +
+            "|".join(q(origin) + "|" + q(origin + ".git") for origin in sorted(_repo_origin(repo))).rstrip("|") +
+            ") ;; *) echo 'Repository Git remote mismatch' >&2; exit 73 ;; esac; "
+            "branch=$(git branch --show-current); "
+            "[ \\"$branch\\" = " + q(branch) + " ] || { echo 'Branch deploy tidak cocok' >&2; exit 74; }; "
+            "[ -z \\"$(git status --porcelain)\\" ] || { echo 'Folder deploy kotor' >&2; exit 75; }; "
+            "git fetch --no-tags origin refs/heads/" + branch + "; "
+            "[ \\"$(git rev-parse --verify FETCH_HEAD)\\" = " + q(expected_sha) + " ] || "
+            "{ echo 'Remote SHA berubah setelah QA' >&2; exit 76; }; "
+            "git pull --ff-only origin " + branch + "; "
+            "[ \\"$(git rev-parse --verify HEAD)\\" = " + q(expected_sha) + " ] || "
+            "{ echo 'Pulled SHA tidak cocok' >&2; exit 77; }; "
+            "docker compose up -d --build; "
+            "printf '\\n--JEMBATAN-COMPOSE-PS--\\n'; "
+            "docker compose ps --format json"
+        )
+        combined = _command(
+            ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
+             "-p", str(cfg["port"]), f"{cfg['username']}@{cfg['host']}",
+             "sh -lc " + q(script)], timeout=1200)
+        separator = "--JEMBATAN-COMPOSE-PS--"
+        if separator in combined:
+            output, status = combined.rsplit(separator, 1)
+        else:
+            output, status = combined, ""
+    health = _compose_health(status)
+    note = ("Seluruh container yang dilaporkan Compose healthy" if health == "healthy" else
+            "Healthcheck Compose gagal atau service tidak running" if health == "unhealthy" else
+            "Sebagian service tidak memiliki healthcheck; periksa secara manual")
+    return {"repo": repo, "path": path, "branch": branch, "commit_sha": expected_sha,
+            "ok": health != "unhealthy", "health": health, "health_verified": health == "healthy",
+            "warning": note if health != "healthy" else "",
+            "output": output[-8000:], "status": status[-4000:]}
