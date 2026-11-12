@@ -22,7 +22,7 @@ QA_PROFILES = {
 NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
 HOST_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9.-]{0,252}$")
 USER_RE = re.compile(r"^[a-z_][a-zA-Z0-9_.-]{0,63}$")
-REPO_RE = re.compile(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$")
+REPO_RE = re.compile(r"^(?!\.{1,2}/)[a-zA-Z0-9_.-]+/(?!\.{1,2}$)[a-zA-Z0-9_.-]+$")
 QA_NAME_RE = re.compile(r"(^|[-_])qa([-_]|$)", re.I)
 
 
@@ -211,6 +211,11 @@ def _command(args, timeout=20, cwd=None, on_chunk=None):
             os.killpg(process.pid, signal.SIGKILL)
             process.wait()
         raise
+    finally:
+        # DefaultSelector unregisters file descriptors but does not close the
+        # Popen pipe. Release it after success, timeout, and failure.
+        if process is not None and process.stdout is not None:
+            process.stdout.close()
     out = output.decode("utf-8", errors="replace").strip()
     if code:
         if code == 255:
