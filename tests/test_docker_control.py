@@ -122,7 +122,7 @@ class DockerControlTests(unittest.TestCase):
             ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan")
 
     def test_local_deploy_requires_existing_git_compose_folder(self):
-        ctl.save_app(self.app, {"repo": "ha00i/Jembatan", "deploy_path": "/unknown-docker-path"})
+        ctl.save_app(self.app, {"repo": "ha00i/Jembatan", "deploy_path": "/srv/unknown-docker-path"})
         with self.assertRaisesRegex(ctl.DockerError, "Mount folder"):
             ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan")
 
