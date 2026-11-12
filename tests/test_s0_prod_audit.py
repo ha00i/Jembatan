@@ -20,7 +20,8 @@ def sample(epoch, mem_gib=4, cpu=10, health="healthy", readable=True, oom=0, con
         "root_disk": {"available_bytes": 40 * s0.GIB, "free_percent": 55},
         "oom_kill_delta": oom, "systemd_pid1": True,
         "cgroup_controllers": controllers if controllers is not None else ["cpu", "memory", "pids"],
-        "docker": {"readable": readable, "cgroup_version": "2", "containers": [
+        "docker": {"readable": readable, "cgroup_version": "2",
+                   "docker_storage": {"available_bytes": 40 * s0.GIB, "free_percent": 55}, "containers": [
             {"name": "erp-prod", "state": "running", "health": health}
         ]}
     }
@@ -65,6 +66,11 @@ class SurveyTests(unittest.TestCase):
         samples = normal_day()
         samples[-1]["docker"]["containers"][0]["health"] = "unknown"
         self.assertTrue(any("erp-prod" in reason for reason in s0.analyze(samples, ["erp-prod"])["reasons"]))
+
+    def test_blocks_docker_disk_unavailable(self):
+        samples = normal_day()
+        samples[100]["docker"]["docker_storage"] = None
+        self.assertTrue(any("Disk Docker" in reason for reason in s0.analyze(samples, ["erp-prod"])["reasons"]))
 
     def test_blocks_missing_docker_access(self):
         samples = normal_day()
