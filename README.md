@@ -61,6 +61,20 @@ Uji modul tanpa layanan eksternal: `python -m unittest discover -s tests -v`.
 Pengujian integrasi pada GitHub dan pengecekan proteksi branch tetap harus dilakukan
 pada repo uji sebelum penghapusan branch produksi.
 
+## S0 — Audit production lokal (collector tersedia, belum dijalankan di servermu)
+
+Sebelum mengaktifkan QA, kumpulkan metrik read-only selama 24 jam pada **host Linux production**, bukan di dalam kontainer Jembatan:
+
+```bash
+python3 scripts/s0_prod_audit.py snapshot
+python3 scripts/s0_prod_audit.py collect --hours 24 --interval 60 --output .s0-audit/samples.jsonl
+# Setelah selesai, ganti nama container sesuai yang benar-benar kritis:
+python3 scripts/s0_prod_audit.py report --input .s0-audit/samples.jsonl --critical nama-container-production
+```
+
+Bukti disimpan privat pada `.s0-audit/` (diabaikan Git). Monitoring hanya mengakses `/proc` dan perintah Docker read-only; **tidak menjalankan QA, mengubah container, mengubah daemon, atau melakukan deploy**.
+Laporan **tidak pernah otomatis mengaktifkan QA**. Lihat [panduan S0 lengkap](docs/S0-PRODUCTION-SURVEY.md).
+
 ## Safe Runner — desain server production lokal (belum aktif)
 
 Untuk server production lokal **8 GB RAM / 4 CPU / tanpa VM**, tersedia rancangan

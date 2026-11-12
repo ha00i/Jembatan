@@ -1,1 +1,6 @@
 .env
+
+# Local production survey contains internal host/container metadata
+.s0-audit/
+__pycache__/
+*.pyc

@@ -8,6 +8,13 @@
 
 **Tidak boleh langsung membuat QA Runner yang menggunakan `/var/run/docker.sock` production**. Jembatan sekarang memiliki mount tersebut dan `TEST_CMD` lama. Sebelum QA otomatis diaktifkan, jalur QA harus dipindahkan ke worker dengan identitas terpisah, cgroup dan jaringan teruji, tanpa kredensial production. Pada hari pertama hanya diperbolehkan monitoring read-only; hasil monitoring menentukan apakah host sanggup menguji secara lokal.
 
+### Status S0 terkini (tooling)
+
+Pengumpul sampel read-only `scripts/s0_prod_audit.py`, 15 unit test sintetis dan panduan
+[S0-PRODUCTION-SURVEY.md](S0-PRODUCTION-SURVEY.md) telah ditambahkan pada fase S0.
+**Baseline 24 jam pada server production asli belum dijalankan atau diverifikasi**.
+Semua jalur QA tetap nonaktif; lanjut ke S1/S2 hanya setelah survei host dan persetujuan operator.
+
 ## Urutan implementasi dan siapa mengerjakan
 
 | Fase | Pemilik utama | Pekerjaan | Verifikasi akhir | Gate |
