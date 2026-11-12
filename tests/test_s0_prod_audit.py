@@ -149,6 +149,8 @@ class SurveyTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as ctx:
                 s0.main(["report", "--input", str(path), "--critical", "nama-container-production"])
             self.assertEqual(ctx.exception.code, 2)
+            with self.assertRaises(SystemExit):
+                s0.main(["report", "--input", str(path), "--critical", "nama-container-YANG-SEBENARNYA"])
 
     def test_interrupt_keeps_sample_and_returns_130(self):
         with tempfile.TemporaryDirectory() as tmp:
