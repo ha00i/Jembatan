@@ -158,7 +158,7 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ST={none:['Belum ada pekerjaan',1],ready:['Commit ditemukan · perlu validasi QA',2],merged_open:['Terindikasi di main · issue masih terbuka',3],done:['Issue ditutup · verifikasi QA terpisah',4]};
-let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},filter:'all',issueQuery:''};
+let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},filter:'all',issueQuery:'',selected:new Set()};
 $('#tok').value=tok;
 
 async function api(p,m='GET',b){
@@ -174,9 +174,10 @@ $('#login').onclick=()=>{tok=$('#tok').value.trim();if(!tok)return note('Masukka
 $('#logout').onclick=()=>{sessionStorage.removeItem('jb-token');location.reload()};
 $('#tok').onkeydown=e=>{if(e.key==='Enter')$('#login').click()};
 $('#q').oninput=drawRepos;
-$('#all').onclick=()=>document.querySelectorAll('#repos input').forEach(i=>i.checked=true);
+$('#all').onclick=()=>{S.selected=new Set(S.repos.map(r=>r.name));drawRepos()};
+$('#repos').onchange=e=>{if(e.target.matches('input[type="checkbox"]')){if(e.target.checked)S.selected.add(e.target.dataset.r);else S.selected.delete(e.target.dataset.r)}};
 $('#sync').onclick=async()=>{
-  const rs=[...document.querySelectorAll('#repos input:checked')].map(i=>i.dataset.r);
+  const rs=[...S.selected];
   if(!rs.length)return note('Centang repo dulu.',1);
   const r=await run('Sinkron '+rs.length+' repo',()=>api('/api/sync','POST',{repos:rs}));
   if(r){await loadRepos();note(Object.entries(r).map(([k,v])=>k+': '+v).join('\n'),Object.values(r).some(v=>v!=='ok'))}
@@ -185,7 +186,7 @@ async function loadRepos(){const r=await run('Memuat repo',()=>api('/api/repos')
 function drawRepos(){
   const q=$('#q').value.toLowerCase();
   $('#repos').innerHTML=S.repos.filter(r=>r.name.toLowerCase().includes(q)).map(r=>
-   `<li><input type="checkbox" data-r="${esc(r.name)}" aria-label="Centang ${esc(r.name)}"><button class="repo${S.repo===r.name?' on':''}" data-open="${esc(r.name)}">${esc(r.name)}<small>${r.synced?'sudah tersinkron':'belum tersinkron'}${r.private?', privat':''}</small></button></li>`).join('');
+   `<li><input type="checkbox" data-r="${esc(r.name)}" aria-label="Centang ${esc(r.name)}"${S.selected.has(r.name)?' checked':''}><button class="repo${S.repo===r.name?' on':''}" data-open="${esc(r.name)}">${esc(r.name)}<small>${r.synced?'sudah tersinkron':'belum tersinkron'}${r.private?', privat':''}</small></button></li>`).join('');
 }
 $('#repos').onclick=e=>{const b=e.target.closest('[data-open]');if(b)openRepo(b.dataset.open)};
 
@@ -247,16 +248,16 @@ $('#view').onclick=async e=>{
     if(r){q('[data-p]').hidden=false;const t=q('[data-prompt]');t.value=r.prompt;copy(t);note('Prompt siap ('+r.chars+' karakter) dan sudah disalin. Tempel ke ChatGPT.')}return;
   }
   if(act==='apply'){
-    const r=await run('Menerapkan patch dan menguji',()=>api('/api/apply','POST',{repo,issue:n,reply:q('[data-reply]').value,branch:S.applied[n]}));
-    if(!r)return;S.applied[n]=r.branch;S.open=n;
+    const r=await run('Menerapkan patch dan menguji',()=>api('/api/apply','POST',{repo,issue:n,reply:q('[data-reply]').value,branch:S.applied[repo+'#'+n]}));
+    if(!r)return;S.applied[repo+'#'+n]=r.branch;S.open=n;
     const res=q('[data-res]');res.hidden=false;
     res.textContent='Branch '+r.branch+' (commit '+r.commit+')\n'+(r.test?(r.test.ok?'Test lolos.':'Test GAGAL.')+'\n'+r.test.output:'TEST_CMD belum diatur, jadi tidak ada test otomatis.');
     q('[data-push]').hidden=!(r.test?r.test.ok:true);
     q('[data-f]').hidden=!r.followup;if(r.followup)q('[data-follow]').value=r.followup;return;
   }
   if(act==='push'){
-    if(!confirm('Push '+S.applied[n]+' ke GitHub dan buat PR?'))return;
-    const r=await run('Push dan membuat PR',()=>api('/api/push','POST',{repo,issue:n,branch:S.applied[n]}));
+    if(!confirm('Push '+S.applied[repo+'#'+n]+' ke GitHub dan buat PR?'))return;
+    const r=await run('Push dan membuat PR',()=>api('/api/push','POST',{repo,issue:n,branch:S.applied[repo+'#'+n]}));
     if(r)q('[data-res]').textContent+='\n\n'+(r.pr?'PR: '+r.pr:'Sudah di-push, tetapi PR gagal dibuat: '+r.error);
   }
 };
