@@ -513,6 +513,121 @@ $('#view').onclick=async e=>{
     if(r)q('[data-res]').textContent+='\n\n'+(r.pr?'PR: '+r.pr:'Sudah di-push, tetapi PR gagal dibuat: '+r.error);
   }
 };
+
+function setPage(page){
+  S.page=page;
+  $('#view').hidden=page!=='repos';
+  $('#docker-view').hidden=page!=='docker';
+  $('#nav-repos').setAttribute('aria-pressed',page==='repos'?'true':'false');
+  $('#nav-docker').setAttribute('aria-pressed',page==='docker'?'true':'false');
+  if(page==='docker')refreshDocker();
+}
+$('#nav-repos').onclick=()=>setPage('repos');
+$('#nav-docker').onclick=()=>setPage('docker');
+async function refreshDocker(){
+  const repo=S.repo;
+  $('#docker-view').textContent='Memuat pengaturan Docker...';
+  const endpoint='/api/docker/settings'+(repo?'?repo='+encodeURIComponent(repo):'');
+  const cfg=await run('Memuat pengaturan Docker',()=>api(endpoint));
+  if(S.page!=='docker'||repo!==S.repo)return;
+  if(!cfg){$('#docker-view').textContent='Pengaturan Docker gagal dimuat.';return}
+  S.dockerCfg=cfg;drawDocker();
+}
+function drawDocker(){
+  const cfg=S.dockerCfg||{},app=cfg.app||{},ssh=cfg.mode==='ssh',repo=S.repo;
+  const profiles=(cfg.profiles||[]).map(p=>'<option value="'+esc(p.id)+'"'+(p.id===app.qa_profile?' selected':'')+'>'+esc(p.label)+'</option>').join('');
+  const disabled=repo?'':' disabled';
+  const html=[
+   '<div class="head"><h2>Docker & QA<span>Atur koneksi, tes container QA, dan deploy per aplikasi.</span></h2><div class="row"><button data-docker="reload">Muat ulang</button><button data-docker="list">Lihat container</button></div></div>',
+   '<div class="docker-grid">',
+   '<div class="docker-panel"><h3>1. Koneksi Docker</h3>',
+   '<p>Local untuk server ini. Remote untuk server lain lewat SSH key terpasang.</p>',
+   '<label for="docker-mode">Metode koneksi</label><select id="docker-mode">',
+   '<option value="local"'+(ssh?'':' selected')+'>Docker Lokal</option>',
+   '<option value="ssh"'+(ssh?' selected':'')+'>Remote SSH</option></select>',
+   '<div class="docker-ssh-fields" id="docker-ssh-fields"'+(ssh?'':' hidden')+'>',
+   '<label for="docker-host">Host/IP</label><input id="docker-host" placeholder="192.168.1.2" value="'+esc(cfg.host||'')+'">',
+   '<label for="docker-user">Username SSH</label><input id="docker-user" placeholder="dev" value="'+esc(cfg.username||'')+'">',
+   '<label for="docker-port">Port SSH</label><input id="docker-port" type="number" min="1" max="65535" value="'+esc(cfg.port||22)+'">',
+   '</div><div class="row"><button class="go" data-docker="save-connection">Simpan</button><button data-docker="test">Tes koneksi</button></div>',
+   '<div id="docker-connection-result" class="docker-caption" role="status"></div></div>',
+   '<div class="docker-panel"><h3>2. Aplikasi & QA</h3>',
+   '<p>'+(repo?'Repository: <strong>'+esc(repo)+'</strong>':'Pilih repository di sidebar kiri dulu.')+'</p>',
+   '<label for="docker-qa-container">Container khusus QA</label>',
+   '<input id="docker-qa-container" placeholder="vortex-qa-qa-app-1" value="'+esc(app.qa_container||'')+'"'+disabled+'>',
+   '<label for="docker-qa-profile">Jenis tes</label><select id="docker-qa-profile"'+disabled+'>',
+   '<option value="">Pilih profil QA</option>'+profiles+'</select>',
+   '<label for="docker-deploy-path">Path Compose aplikasi</label>',
+   '<input id="docker-deploy-path" placeholder="/srv/apps/project" value="'+esc(app.deploy_path||'')+'"'+disabled+'>',
+   '<div class="row"><button data-docker="save-app"'+disabled+'>Simpan aplikasi</button>',
+   '<button class="go" data-docker="qa"'+disabled+'>Run QA</button>',
+   '<button class="danger-outline" data-docker="deploy"'+disabled+'>Deploy</button></div>',
+   '<p class="docker-caption">QA hanya pada container bernama QA; pastikan database/volume QA benar-benar terpisah. Deploy meminta konfirmasi nama repo.</p>',
+   '</div>',
+   '<div class="docker-panel docker-wide"><h3>3. Container & hasil</h3>',
+   '<p>Daftar container aktif dan hasil operasi yang kamu jalankan.</p>',
+   '<div id="docker-container-list" class="docker-containers"><span class="mute">Klik Lihat container.</span></div>',
+   '<pre id="docker-output" class="docker-out" hidden aria-live="polite"></pre></div>',
+   '</div>'
+  ].join('');
+  $('#docker-view').innerHTML=html;
+}
+$('#docker-view').onchange=e=>{
+  if(e.target&&e.target.id==='docker-mode')$('#docker-ssh-fields').hidden=e.target.value!=='ssh';
+};
+$('#docker-view').onclick=async e=>{
+  const fill=e.target.closest('[data-qa-fill]');
+  if(fill){$('#docker-qa-container').value=fill.dataset.qaFill;return}
+  const b=e.target.closest('[data-docker]');
+  if(!b)return;
+  const act=b.dataset.docker,repo=S.repo;
+  const output=t=>{const el=$('#docker-output');if(el){el.hidden=false;el.textContent=String(t)}};
+  if(act==='reload')return refreshDocker();
+  if(act==='save-connection'){
+    const data={mode:$('#docker-mode').value,host:$('#docker-host').value.trim(),
+      username:$('#docker-user').value.trim(),port:Number($('#docker-port').value||22)};
+    const r=await run('Menyimpan koneksi',()=>api('/api/docker/settings','POST',data));
+    if(r){S.dockerCfg={...S.dockerCfg,...r};drawDocker();note('Koneksi disimpan. Jalankan tes koneksi.')}
+    return;
+  }
+  if(act==='test'){
+    const r=await run('Tes koneksi Docker',()=>api('/api/docker/connection'));
+    if(r)$('#docker-connection-result').textContent='Terhubung · Docker '+r.engine_version+' · '+r.server;
+    return;
+  }
+  if(act==='list'){
+    const r=await run('Membaca container',()=>api('/api/docker/containers'));
+    if(r){
+      S.dockerContainers=r.containers||[];
+      $('#docker-container-list').innerHTML=S.dockerContainers.length?
+        S.dockerContainers.map(c=>'<button data-qa-fill="'+esc(c.name)+'" type="button" title="Pilih container QA">'+esc(c.name)+' · '+esc(c.status)+'</button>').join(''):
+        '<span class="mute">Tidak ada container running.</span>';
+    }
+    return;
+  }
+  if(!repo)return note('Pilih repository dulu.',1);
+  if(act==='save-app'){
+    const body={repo,qa_container:$('#docker-qa-container').value.trim(),
+      qa_profile:$('#docker-qa-profile').value,deploy_path:$('#docker-deploy-path').value.trim()};
+    const r=await run('Menyimpan aplikasi',()=>api('/api/docker/app','POST',body));
+    if(r){S.dockerCfg.app=r;note('Pengaturan aplikasi disimpan.')}
+    return;
+  }
+  if(act==='qa'){
+    if(!confirm('Jalankan tes preset hanya di container QA yang database dan volumenya sudah kamu pisahkan dari production?'))return;
+    const r=await run('Menjalankan QA',()=>api('/api/docker/qa','POST',{repo}));
+    if(r)output((r.ok?'QA COMMAND PASS':'QA COMMAND FAIL')+' · '+r.container+' · '+r.profile+
+      '\n\n'+r.output+'\n\nCatatan: tes container existing tidak otomatis membuktikan commit branch terakhir diuji.');
+    return;
+  }
+  if(act==='deploy'){
+    const typed=prompt('Konfirmasi deploy production. Ketik nama repository persis:\n'+repo);
+    if(typed!==repo)return note('Deploy dibatalkan: konfirmasi tidak cocok.',1);
+    const r=await run('Deploy aplikasi',()=>api('/api/deploy','POST',{repo,confirm:typed}));
+    if(r)output('Deploy selesai: '+r.path+'\n\n'+r.output+'\n\n'+r.status);
+  }
+};
+
 if(tok)loadRepos();
 </script>
 </body>
