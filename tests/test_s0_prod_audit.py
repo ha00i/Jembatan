@@ -171,6 +171,10 @@ class SurveyTests(unittest.TestCase):
         ]}):
             self.assertEqual(s0.main(["containers"]), 0)
 
+    def test_list_containers_fails_closed_if_docker_unavailable(self):
+        with patch.object(s0, "docker_snapshot", return_value={"readable": False, "containers": []}):
+            self.assertEqual(s0.main(["containers"]), 2)
+
     def test_status_reads_existing_samples_without_authorizing_qa(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "s0.jsonl"
