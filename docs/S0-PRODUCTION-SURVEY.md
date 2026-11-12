@@ -34,7 +34,7 @@ python3 scripts/s0_prod_audit.py report --input .s0-audit/samples.jsonl \
 ## Apa yang dikumpulkan?
 
 - Waktu UTC, CPU busy dari delta \`/proc/stat\`, \`MemAvailable\` dan total RAM, kenaikan \`oom_kill\` dari \`/proc/vmstat\`.
-- Disk root dan (jika terbaca) lokasi data Docker, \`cgroup v2\`, controller dan status systemd PID 1.
+- Disk root dan lokasi data Docker (jika tidak terbaca hasil baseline tetap ditahan), \`cgroup v2\`, controller dan status systemd PID 1.
 - \`docker info\` **read-only** untuk versi cgroup, driver dan Docker root directory; \`docker ps -a\` **read-only** untuk nama container, state dan string healthcheck.
 - **Tidak mengumpulkan** image layers, \`docker inspect\` secrets, env, token GitHub, \`.env\`, IP/port, volume contents, database, private logs atau proses shell aplikasi.
 
@@ -46,7 +46,7 @@ Data mentah disimpan dalam \`.s0-audit/samples.jsonl\`, laporan ringkas di \`.s0
 - \`S0_BASELINE_CANDIDATE\`: hanya berarti baseline host memenuhi skrining awal; **tidak berarti otomatis aman menjalankan QA**.
 - \`qa_enabled: false\`: **SELALU false**. S2 memerlukan bukti bahwa rootless daemon, cgroup aggregate, firewall, batas disk, dan pemisahan privilege benar-benar bekerja sebelum job apa pun diaktifkan.
 
-Ambang awal: MemAvailable minimum 3 GiB, disk root ≥15 GiB & ≥20% free, baseline 24 jam tanpa gap >3 menit, Docker read-only selalu tersedia, service critical selalu running + healthy, cgroup v2/systemd/controller CPU/memory/pids tersedia, dan tidak ada OOM. CPU lonjakan tinggi harus dianalisis ulang sebelum jadwal QA ditetapkan. Ini **nilai desain**, bukan angka yang sudah diukur pada servermu.
+Ambang awal: MemAvailable minimum 3 GiB, disk root dan storage Docker ≥15 GiB & ≥20% free, baseline 24 jam tanpa gap >3 menit, Docker read-only selalu tersedia, service critical selalu running + healthy, cgroup v2/systemd/controller CPU/memory/pids tersedia, dan tidak ada OOM. CPU lonjakan tinggi harus dianalisis ulang sebelum jadwal QA ditetapkan. Ini **nilai desain**, bukan angka yang sudah diukur pada servermu.
 
 Container tanpa \`HEALTHCHECK\` akan berstatus \`unknown\` dan tidak bisa dinyatakan safe otomatis. Jangan memasang healthcheck baru selama S0; kebutuhan probe akan ditangani kemudian.
 
