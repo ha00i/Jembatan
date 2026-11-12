@@ -1,6 +1,7 @@
 """Docker & QA tests: no real Docker, SSH, Git, or deployment is invoked."""
 import importlib.util
 import os
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -24,6 +25,16 @@ class DockerControlTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.app = StubApp(self.tmp.name)
+
+    def test_subprocess_output_is_memory_bounded(self):
+        output = ctl._command([sys.executable, "-c", "print('x' * 100000)"], timeout=5)
+        self.assertLessEqual(len(output), 65536)
+        self.assertTrue(output.endswith("xxxx"))
+
+    def test_subprocess_timeout_reports_error(self):
+        with self.assertRaises(ctl.DockerError) as ctx:
+            ctl._command([sys.executable, "-c", "import time; time.sleep(5)"], timeout=0.1)
+        self.assertEqual(ctx.exception.code, 504)
 
     def test_local_is_default_and_has_no_secrets(self):
         settings = ctl.public_settings(self.app)
