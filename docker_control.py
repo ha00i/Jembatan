@@ -138,7 +138,8 @@ def save_app(app, body):
     if not isinstance(deploy_path, str) or (deploy_path and
             (not deploy_path.startswith("/") or "\x00" in deploy_path or "\n" in deploy_path)):
         raise DockerError("Path deploy harus absolut, misalnya /srv/apps/app")
-    if deploy_path and (".." in Path(deploy_path).parts or len(deploy_path) > 400):
+    if deploy_path and (".." in Path(deploy_path).parts or len(deploy_path) > 400 or
+                        len(Path(deploy_path).parts) < 3):
         raise DockerError("Path deploy tidak valid")
     cfg = load(app)
     cfg["apps"][repo] = {"qa_container": container, "qa_profile": profile,
@@ -157,7 +158,8 @@ def _docker_base(app):
 
 
 def _command(args, timeout=20, cwd=None):
-    env = {k: v for k, v in os.environ.items() if k not in ("DOCKER_HOST", "DOCKER_CONTEXT")}
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("DOCKER_HOST", "DOCKER_CONTEXT", "GITHUB_TOKEN", "ADMIN_TOKEN", "TEST_CMD")}
     env["GIT_TERMINAL_PROMPT"] = "0"
     try:
         p = subprocess.run(args, capture_output=True, text=True, timeout=timeout,
@@ -244,6 +246,11 @@ def deploy(app, repo, confirm):
             raise DockerError("Folder deploy tidak tersedia di container Jembatan. Mount folder ini terlebih dahulu.", 409)
         if not any((directory / name).is_file() for name in ("compose.yaml", "compose.yml", "docker-compose.yml", "docker-compose.yaml")):
             raise DockerError("Compose file tidak ditemukan pada folder deploy", 409)
+        # Prevent accidentally deploying a different repository through a mapped path.
+        origin = _command(["git", "remote", "get-url", "origin"], timeout=12, cwd=directory).strip()
+        acceptable = (f"github.com/{repo}", f"github.com:{repo}")
+        if not any(origin.rstrip("/").removesuffix(".git").endswith(item) for item in acceptable):
+            raise DockerError("Remote Git pada folder deploy tidak cocok dengan repository terpilih", 409)
         # no fallback to arbitrary source/branch; deploy path explicitly configured
         _command(["git", "pull", "--ff-only"], timeout=180, cwd=directory)
         output = _docker(app, "compose", "up", "-d", "--build", timeout=1200, cwd=directory)
