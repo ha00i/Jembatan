@@ -248,9 +248,14 @@ def deploy(app, repo, confirm):
             raise DockerError("Compose file tidak ditemukan pada folder deploy", 409)
         # Prevent accidentally deploying a different repository through a mapped path.
         origin = _command(["git", "remote", "get-url", "origin"], timeout=12, cwd=directory).strip()
-        acceptable = (f"github.com/{repo}", f"github.com:{repo}")
-        if not any(origin.rstrip("/").removesuffix(".git").endswith(item) for item in acceptable):
+        normalized = origin.rstrip("/").removesuffix(".git")
+        allowed_origins = {f"https://github.com/{repo}", f"git@github.com:{repo}",
+                           f"ssh://git@github.com/{repo}"}
+        if normalized not in allowed_origins:
             raise DockerError("Remote Git pada folder deploy tidak cocok dengan repository terpilih", 409)
+        dirty = _command(["git", "status", "--porcelain"], timeout=12, cwd=directory)
+        if dirty:
+            raise DockerError("Folder deploy memiliki perubahan lokal; periksa dahulu sebelum deploy", 409)
         # no fallback to arbitrary source/branch; deploy path explicitly configured
         _command(["git", "pull", "--ff-only"], timeout=180, cwd=directory)
         output = _docker(app, "compose", "up", "-d", "--build", timeout=1200, cwd=directory)
