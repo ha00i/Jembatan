@@ -12,6 +12,8 @@ spec = importlib.util.spec_from_file_location("docker_control", HERE / "docker_c
 ctl = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ctl)
 
+SHA = "a" * 40
+
 
 class StubApp:
     DEPLOY_MAP = {}
@@ -119,12 +121,12 @@ class DockerControlTests(unittest.TestCase):
 
     def test_deploy_without_explicit_mapping_blocked(self):
         with self.assertRaisesRegex(ctl.DockerError, "Path deploy"):
-            ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan")
+            ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan", "main", SHA)
 
     def test_local_deploy_requires_existing_git_compose_folder(self):
         ctl.save_app(self.app, {"repo": "ha00i/Jembatan", "deploy_path": "/srv/unknown-docker-path"})
         with self.assertRaisesRegex(ctl.DockerError, "Mount folder"):
-            ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan")
+            ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan", "main", SHA)
 
     def test_local_deploy_runs_only_mapped_directory(self):
         folder = Path(self.tmp.name) / "app"
@@ -132,11 +134,18 @@ class DockerControlTests(unittest.TestCase):
         (folder / ".git").mkdir()
         (folder / "compose.yaml").write_text("services: {}\n")
         ctl.save_app(self.app, {"repo": "ha00i/Jembatan", "deploy_path": str(folder)})
-        with patch.object(ctl, "_command", side_effect=["https://github.com/ha00i/Jembatan.git", "", "updated"]) as git:
-            with patch.object(ctl, "_docker", side_effect=["created", "healthy"]) as dock:
-                result = ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan")
+        with patch.object(ctl, "_command", side_effect=[
+            "https://github.com/ha00i/Jembatan.git", "main", "", "", SHA, "updated", SHA
+        ]) as git:
+            with patch.object(ctl, "_docker", side_effect=[
+                "created", '{"State":"running","Health":"healthy"}'
+            ]) as dock:
+                result = ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan", "main", SHA)
         self.assertTrue(result["ok"])
-        self.assertEqual(git.call_args.args[0], ["git", "pull", "--ff-only"])
+        self.assertIn(["git", "pull", "--ff-only", "origin", "main"],
+                          [call.args[0] for call in git.call_args_list])
+        self.assertTrue(result["health_verified"])
+        self.assertEqual(result["commit_sha"], SHA)
         self.assertEqual(dock.call_args_list[0].args[1:],
                          ("compose", "up", "-d", "--build"))
         self.assertEqual(dock.call_args_list[0].kwargs["cwd"], folder)
@@ -150,7 +159,7 @@ class DockerControlTests(unittest.TestCase):
         with patch.object(ctl, "_command", return_value="https://github.com/other/wrong.git"):
             with patch.object(ctl, "_docker") as dock:
                 with self.assertRaisesRegex(ctl.DockerError, "tidak cocok"):
-                    ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan")
+                    ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan", "main", SHA)
                 dock.assert_not_called()
 
     def test_dirty_deploy_checkout_is_rejected(self):
@@ -159,10 +168,10 @@ class DockerControlTests(unittest.TestCase):
         (folder / ".git").mkdir()
         (folder / "compose.yaml").write_text("services: {}\n")
         ctl.save_app(self.app, {"repo": "ha00i/Jembatan", "deploy_path": str(folder)})
-        with patch.object(ctl, "_command", side_effect=["git@github.com:ha00i/Jembatan.git", " M compose.yaml"]):
+        with patch.object(ctl, "_command", side_effect=["git@github.com:ha00i/Jembatan.git", "main", " M compose.yaml"]):
             with patch.object(ctl, "_docker") as docker:
                 with self.assertRaisesRegex(ctl.DockerError, "perubahan lokal"):
-                    ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan")
+                    ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan", "main", SHA)
                 docker.assert_not_called()
 
     def test_fake_github_host_is_rejected(self):
@@ -173,7 +182,49 @@ class DockerControlTests(unittest.TestCase):
         ctl.save_app(self.app, {"repo": "ha00i/Jembatan", "deploy_path": str(folder)})
         with patch.object(ctl, "_command", return_value="https://fakegithub.com/ha00i/Jembatan"):
             with self.assertRaisesRegex(ctl.DockerError, "tidak cocok"):
-                ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan")
+                ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan", "main", SHA)
+
+    def test_rejects_unknown_deploy_branch(self):
+        with self.assertRaisesRegex(ctl.DockerError, "main atau staging"):
+            ctl.save_app(self.app, {"repo": "ha00i/Jembatan",
+                                    "deploy_branch": "feature-untrusted"})
+
+    def test_deploy_without_sha_evidence_is_blocked(self):
+        with self.assertRaisesRegex(ctl.DockerError, "Bukti QA"):
+            ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan", "main")
+
+    def test_wrong_active_branch_blocks_deploy_before_build(self):
+        folder = Path(self.tmp.name) / "wrong-branch"
+        folder.mkdir()
+        (folder / ".git").mkdir()
+        (folder / "compose.yaml").write_text("services: {}\\n")
+        ctl.save_app(self.app, {"repo": "ha00i/Jembatan", "deploy_path": str(folder)})
+        with patch.object(ctl, "_command", side_effect=[
+            "https://github.com/ha00i/Jembatan", "staging"
+        ]):
+            with patch.object(ctl, "_docker") as dock:
+                with self.assertRaisesRegex(ctl.DockerError, "Branch aktif"):
+                    ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan", "main", SHA)
+                dock.assert_not_called()
+
+    def test_remote_tip_changed_after_qa_blocks_build(self):
+        folder = Path(self.tmp.name) / "changed-sha"
+        folder.mkdir()
+        (folder / ".git").mkdir()
+        (folder / "compose.yaml").write_text("services: {}\\n")
+        ctl.save_app(self.app, {"repo": "ha00i/Jembatan", "deploy_path": str(folder)})
+        with patch.object(ctl, "_command", side_effect=[
+            "https://github.com/ha00i/Jembatan", "main", "", "", "b" * 40
+        ]):
+            with patch.object(ctl, "_docker") as dock:
+                with self.assertRaisesRegex(ctl.DockerError, "Commit GitHub berubah"):
+                    ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan", "main", SHA)
+                dock.assert_not_called()
+
+    def test_compose_health_unknown_is_not_claimed_healthy(self):
+        self.assertEqual(ctl._compose_health('{"State":"running","Health":""}'), "unverified")
+        self.assertEqual(ctl._compose_health('{"State":"running","Health":"unhealthy"}'), "unhealthy")
+        self.assertEqual(ctl._compose_health('{"State":"running","Health":"healthy"}'), "healthy")
 
     def test_connection_only_checks_read_only_info(self):
         with patch.object(ctl, "_docker", return_value="27.4|2|mail") as dock:
@@ -186,8 +237,9 @@ class DockerControlTests(unittest.TestCase):
                                        "username": "dev", "port": 22})
         ctl.save_app(self.app, {"repo": "ha00i/Jembatan",
                                 "deploy_path": "/srv/my project"})
-        with patch.object(ctl, "_command", return_value="deployed") as runner:
-            result = ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan")
+        with patch.object(ctl, "_command",
+                          return_value='deployed\\n--JEMBATAN-COMPOSE-PS--\\n{"State":"running","Health":"healthy"}') as runner:
+            result = ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan", "main", SHA)
         cmd = runner.call_args.args[0]
         self.assertIn("StrictHostKeyChecking=yes", cmd)
         self.assertIn("dev@192.168.1.2", cmd)
