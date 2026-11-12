@@ -7,7 +7,7 @@ HTML = (Path(__file__).resolve().parents[1] / "index.html").read_text(encoding="
 
 class DockerActivityUIContract(unittest.TestCase):
     def test_qa_uses_real_api_and_indeterminate_activity(self):
-        self.assertIn("api('/api/docker/qa','POST',{repo})", HTML)
+        self.assertIn("api('/api/docker/qa/start','POST',{repo})", HTML)
         self.assertIn('class="progress-track" role="progressbar"', HTML)
         self.assertIn("tanpa informasi persentase", HTML)
         self.assertIn("durationLabel(", HTML)
@@ -16,7 +16,7 @@ class DockerActivityUIContract(unittest.TestCase):
         self.assertIn("if(S.dockerOperation)return false", HTML)
         self.assertIn("Masih ada operasi Docker yang berjalan.", HTML)
         self.assertIn("startDockerOperation('qa',repo)", HTML)
-        self.assertIn("finishDockerOperation(!!r?.ok", HTML)
+        self.assertIn("finishDockerOperation(ok,title", HTML)
 
     def test_result_is_preserved_in_render_state(self):
         self.assertIn("S.dockerResult={kind:op.kind", HTML)
@@ -25,10 +25,23 @@ class DockerActivityUIContract(unittest.TestCase):
         self.assertIn("data-docker=\"copy-result\"", HTML)
 
     def test_success_failure_and_network_responses_are_distinct(self):
-        self.assertIn("QA belum lulus", HTML)
-        self.assertIn("QA COMMAND FAIL", HTML)
-        self.assertIn("QA COMMAND PASS", HTML)
-        self.assertIn("Permintaan QA gagal. Lihat notifikasi", HTML)
+        self.assertIn("QA FAIL", HTML)
+        self.assertIn("job.state==='failed'", HTML)
+        self.assertIn("job.state==='passed'", HTML)
+        self.assertIn("QA gagal dimulai", HTML)
+
+    def test_verbose_log_polling_is_real_and_recoverable(self):
+        self.assertIn("/api/docker/qa/status?repo=", HTML)
+        self.assertIn("async function pollQaStatus(repo)", HTML)
+        self.assertIn("S.qaLive?.log", HTML)
+        self.assertIn("startQaPoll(repo)", HTML)
+        self.assertIn("job.started_at", HTML)
+        self.assertIn("truncated", HTML)
+
+    def test_qa_log_does_not_claim_fake_percent(self):
+        self.assertIn("tanpa informasi persentase", HTML)
+        self.assertIn("Progres waktu nyata tanpa persentase buatan", HTML)
+        self.assertIn("aria-label=\"Verbose log Docker QA\"", HTML)
 
     def test_toasts_are_actionable_and_accessible(self):
         self.assertIn('id="toast-stack" aria-label="Notifikasi aktivitas"', HTML)
