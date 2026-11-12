@@ -181,6 +181,10 @@ def analyze(samples, critical, min_seconds=MIN_SURVEY_SECONDS, max_gap=180):
             reasons.append("Ada window CPU rata-rata tinggi; jadwalkan QA hanya pada jam idle")
     if any(not d or d.get("available_bytes", 0) < 15 * GIB or d.get("free_percent", 0) < 20 for d in disks):
         reasons.append("Kapasitas disk host tidak memenuhi >=15 GiB dan >=20% kosong")
+    if any(not (s.get("docker", {}).get("docker_storage")) or
+           s["docker"]["docker_storage"].get("available_bytes", 0) < 15 * GIB or
+           s["docker"]["docker_storage"].get("free_percent", 0) < 20 for s in samples):
+        reasons.append("Disk Docker tidak dapat dibaca atau tidak memenuhi >=15 GiB dan >=20% kosong")
     if any(s.get("oom_kill_delta", 0) not in (None, 0) for s in samples):
         reasons.append("Ada OOM kill di host selama survei")
     if not critical:
