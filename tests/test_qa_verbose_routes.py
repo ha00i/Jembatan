@@ -7,7 +7,7 @@ import qa_jobs
 
 class QARoutesTests(unittest.TestCase):
     def test_bridge_rejects_traversal_repo_names(self):
-        for repo in ("../another-repo", "owner/..", "./foo", "owner/."):
+        for repo in ("../another-repo", "owner/..", "./foo", "owner/.", "owner/repo\n", None):
             with self.subTest(repo=repo):
                 with self.assertRaisesRegex(bridge.Err, "tidak valid"):
                     bridge.repo_dir(repo)
