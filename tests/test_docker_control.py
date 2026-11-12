@@ -121,7 +121,7 @@ class DockerControlTests(unittest.TestCase):
         (folder / ".git").mkdir()
         (folder / "compose.yaml").write_text("services: {}\n")
         ctl.save_app(self.app, {"repo": "ha00i/Jembatan", "deploy_path": str(folder)})
-        with patch.object(ctl, "_command", return_value="updated") as git:
+        with patch.object(ctl, "_command", side_effect=["https://github.com/ha00i/Jembatan.git", "updated"]) as git:
             with patch.object(ctl, "_docker", side_effect=["created", "healthy"]) as dock:
                 result = ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan")
         self.assertTrue(result["ok"])
@@ -129,6 +129,18 @@ class DockerControlTests(unittest.TestCase):
         self.assertEqual(dock.call_args_list[0].args[1:],
                          ("compose", "up", "-d", "--build"))
         self.assertEqual(dock.call_args_list[0].kwargs["cwd"], folder)
+
+    def test_wrong_repository_mapping_is_blocked_before_deploy(self):
+        folder = Path(self.tmp.name) / "wrong-app"
+        folder.mkdir()
+        (folder / ".git").mkdir()
+        (folder / "docker-compose.yml").write_text("services: {}\n")
+        ctl.save_app(self.app, {"repo": "ha00i/Jembatan", "deploy_path": str(folder)})
+        with patch.object(ctl, "_command", return_value="https://github.com/other/wrong.git"):
+            with patch.object(ctl, "_docker") as dock:
+                with self.assertRaisesRegex(ctl.DockerError, "tidak cocok"):
+                    ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan")
+                dock.assert_not_called()
 
     def test_connection_only_checks_read_only_info(self):
         with patch.object(ctl, "_docker", return_value="27.4|2|mail") as dock:
