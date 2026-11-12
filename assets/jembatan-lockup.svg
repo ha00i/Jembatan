@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 220" role="img" aria-labelledby="title desc">
+<title id="title">Jembatan</title><desc id="desc">GitHub, QA, dan deployment dalam satu kendali</desc>
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#295BFF"/><stop offset=".55" stop-color="#11A4DA"/><stop offset="1" stop-color="#20D5A8"/></linearGradient></defs>
+<rect x="10" y="11" width="198" height="198" rx="48" fill="#0D1738"/>
+<path d="M44 150Q111 100 178 150" fill="none" stroke="url(#g)" stroke-width="13" stroke-linecap="round"/>
+<path d="M71 92h22v45H71z M129 92h22v45h-22z" fill="#2766CA"/>
+<path d="M80 104Q111 131 140 104 M53 140Q78 116 81 105 M139 105Q152 120 170 141" fill="none" stroke="url(#g)" stroke-width="5"/>
+<path d="M104 117v17 M116 118v16 M59 137v13 M162 137v13" stroke="#A4F7E9" stroke-width="3"/>
+<path d="M45 70Q111-3 177 70" fill="none" stroke="url(#g)" stroke-width="6" stroke-linecap="round"/>
+<circle cx="45" cy="70" r="8" fill="#306EF2"/><circle cx="92" cy="40" r="8" fill="#1D93EB"/><circle cx="130" cy="40" r="8" fill="#12B7CE"/><circle cx="177" cy="70" r="8" fill="#20D5A8"/>
+<text x="242" y="131" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="94" font-weight="800" letter-spacing="-5" fill="#111B45">Jembatan</text>
+<path d="M249 157h390" stroke="url(#g)" stroke-width="7" stroke-linecap="round"/>
+<text x="248" y="184" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="21" font-weight="600" letter-spacing="3.5" fill="#58718F">DEVELOPMENT CONTROL</text>
+</svg>
