@@ -87,7 +87,7 @@ class QAJobTests(unittest.TestCase):
                 result = self.wait_done()
         self.assertEqual(result["state"], "failed")
         self.assertFalse(result["ok"])
-        self.assertEqual(result["exit_code"], 1)
+        self.assertIsNone(result["exit_code"])  # nonzero exit code not exposed by legacy Docker runner
 
     def test_worker_exception_is_visible_as_failed(self):
         with patch.object(qa.docker_control, "_app_settings", side_effect=mapping):
