@@ -212,6 +212,23 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
 @media(max-width:540px){.patch-toast{left:16px;right:16px;width:auto;bottom:max(12px,env(safe-area-inset-bottom));padding:14px}}
 @media(forced-colors:active){.patch-toast{border:2px solid CanvasText}.patch-toast-mark{border:1px solid CanvasText}}
 
+
+.simple-nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}
+.simple-nav button[aria-pressed=true]{color:var(--accent);background:var(--accent-soft);border-color:#a2ccc4}
+.docker-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.docker-panel{border:1px solid var(--line);background:var(--surface);padding:21px;border-radius:12px;min-width:0}
+.docker-panel h3{margin:0 0 7px;font-size:18px}
+.docker-panel p{margin:0 0 16px;color:var(--muted);font-size:13px}
+.docker-panel label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 5px}
+.docker-panel input,.docker-panel select{width:100%}
+.docker-panel .row{margin-top:14px}
+.docker-wide{grid-column:1/-1}
+.docker-containers{display:flex;flex-wrap:wrap;gap:7px;max-height:185px;overflow:auto}
+.docker-containers button{font-size:12px;font-weight:500;text-align:left}
+.docker-out{white-space:pre-wrap;overflow:auto;max-height:300px;font-size:12px;background:var(--code);border-radius:8px;padding:12px}
+.docker-caption{font-size:12px;color:var(--muted);margin-top:8px}
+.docker-ssh-fields[hidden],#docker-view[hidden],#view[hidden]{display:none!important}
+@media(max-width:820px){.docker-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -224,7 +241,13 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
   <ul id="repos"></ul>
   <div class="sidebar-foot"><p><span class="mini-led" aria-hidden="true"></span>Tanpa API model berbayar</p><button id="logout" class="quiet">Keluar</button></div>
 </aside>
-<main><header class="topbar"><div class="crumb"><strong>Workspace</strong><span>/</span>Operasi repository</div><div class="connect-note"><span class="mini-led" aria-hidden="true"></span>ChatGPT manual · Eksekusi GitHub lokal</div></header><section class="content"><div id="note" role="status" aria-live="polite"></div><div id="view"><div class="welcome"><span class="eyebrow">Mulai dari repository</span><h2>Satu kendali untuk setiap issue dan branch.</h2><p>Pilih repository di panel kiri. Jembatan akan membantu meninjau hubungan issue, commit, dan branch tanpa memerlukan API ChatGPT berbayar.</p><div class="steps"><div><span>01</span><strong>Sinkronkan repository</strong>Ambil branch dan issue dari GitHub.</div><div><span>02</span><strong>Kerjakan lewat ChatGPT</strong>Salin prompt, lalu tempel patch hasil analisis.</div><div><span>03</span><strong>Uji dan kirim PR</strong>Periksa hasil QA sebelum merge dan deploy.</div></div></div></div></section></main>
+<main><header class="topbar"><div class="crumb"><strong>Workspace</strong><span>/</span>Operasi repository</div><div class="connect-note"><span class="mini-led" aria-hidden="true"></span>ChatGPT manual · Eksekusi GitHub lokal</div></header><section class="content"><div id="note" role="status" aria-live="polite"></div>
+<nav class="simple-nav" aria-label="Menu utama">
+<button type="button" id="nav-repos" aria-pressed="true">Repositories & Issues</button>
+<button type="button" id="nav-docker" aria-pressed="false">Docker & QA</button>
+</nav>
+<div id="docker-view" hidden></div>
+<div id="view"><div class="welcome"><span class="eyebrow">Mulai dari repository</span><h2>Satu kendali untuk setiap issue dan branch.</h2><p>Pilih repository di panel kiri. Jembatan akan membantu meninjau hubungan issue, commit, dan branch tanpa memerlukan API ChatGPT berbayar.</p><div class="steps"><div><span>01</span><strong>Sinkronkan repository</strong>Ambil branch dan issue dari GitHub.</div><div><span>02</span><strong>Kerjakan lewat ChatGPT</strong>Salin prompt, lalu tempel patch hasil analisis.</div><div><span>03</span><strong>Uji dan kirim PR</strong>Periksa hasil QA sebelum merge dan deploy.</div></div></div></div></section></main>
 <dialog class="confirm-dialog" id="branch-delete-dialog" aria-labelledby="branch-delete-title"><h2 id="branch-delete-title">Hapus branch dari GitHub?</h2><p id="branch-delete-description"></p><p id="branch-delete-proof"></p><label for="branch-delete-input">Ketik nama branch persis untuk konfirmasi</label><input id="branch-delete-input" autocomplete="off" spellcheck="false"><p class="modal-error" id="branch-delete-error" role="alert"></p><div class="confirm-actions"><button type="button" id="branch-delete-cancel">Batal</button><button type="button" id="branch-delete-confirm" class="danger-action" disabled>Hapus branch</button></div></dialog>
 </div>
 <div class="patch-toast" id="patch-toast" role="alert" aria-labelledby="patch-toast-title" hidden>
@@ -240,7 +263,7 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ST={none:['Belum ada pekerjaan',1],ready:['Commit ditemukan · perlu validasi QA',2],merged_open:['Terindikasi di main · issue masih terbuka',3],done:['Issue ditutup · verifikasi QA terpisah',4]};
-let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},filter:'all',issueQuery:'',selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0};
+let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},filter:'all',issueQuery:'',selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0,page:'repos',showClosed:false,dockerCfg:null,dockerContainers:[]};
 $('#tok').value=tok;
 
 async function api(p,m='GET',b){
@@ -316,19 +339,19 @@ async function openRepo(n){
   S.repo=n;S.filter='all';S.issueQuery='';S.data=null;S.branchData=null;S.branchError=null;S.branchLoading=true;S.branchQuery='';S.branchFilter='all';S.branchRequestId++;if($('#branch-delete-dialog').open)$('#branch-delete-dialog').close();drawRepos();
   $('#view').innerHTML='<div class="welcome"><span class="eyebrow">Memuat repository</span><h2>Memeriksa issue dan branch...</h2><p>Data dibaca dari sinkronisasi lokal dan GitHub.</p></div>';
   const d=await run('Membaca branch dan issue',()=>api('/api/overview?repo='+encodeURIComponent(n)));
-  if(d){S.data=d;drawMain();refreshBranches(n)}
+  if(d){S.data=d;drawMain();refreshBranches(n);if(S.page==='docker')refreshDocker()}
   else{$('#view').innerHTML='<div class="welcome"><span class="eyebrow">Repository belum siap</span><h2>Workspace belum dapat dibuka.</h2><p>Sinkronkan repo terlebih dahulu, lalu periksa pesan kesalahan di atas.</p></div>'}
 }
 function drawMain(){
   const d=S.data,cnt=k=>d.issues.filter(i=>i.status===k).length;
   const chips=[['all','Semua',d.issues.length],...Object.entries(ST).map(([k,v])=>[k,v[0].split(',')[0],cnt(k)])];
-  const list=d.issues.filter(i=>(S.filter==='all'||i.status===S.filter)&&(!S.issueQuery||(i.title+' #'+i.number).toLowerCase().includes(S.issueQuery.toLowerCase())));
+  const list=d.issues.filter(i=>(S.showClosed||i.state==='open')&&(S.filter==='all'||i.status===S.filter)&&(!S.issueQuery||(i.title+' #'+i.number).toLowerCase().includes(S.issueQuery.toLowerCase())));
   $('#view').innerHTML=`
    <div class="head"><h2>${esc(d.repo)} <span class="mute">(utama: ${esc(d.base)})</span></h2>
-    <div class="row"><button data-act="reload">Muat ulang</button><button class="danger-outline" data-act="deploy">Deploy dari main</button></div></div>
+    <div class="row"><button data-act="reload">Muat ulang</button><button data-act="open-docker">Docker & QA</button></div></div>
    <p class="context-note">Status adalah indikasi dari nama branch dan pesan commit, bukan bukti QA atau persetujuan merge.</p><pre id="deploy-out" hidden></pre>
    <div class="metrics"><div class="metric"><span class="marker"></span><span class="value">${cnt('none')}</span><span class="meta">Belum ditangani</span></div><div class="metric review"><span class="marker"></span><span class="value">${cnt('ready')}</span><span class="meta">Perlu validasi</span></div><div class="metric merged"><span class="marker"></span><span class="value">${cnt('merged_open')}</span><span class="meta">Diduga sudah di main</span></div><div class="metric done"><span class="marker"></span><span class="value">${cnt('done')}</span><span class="meta">Issue ditutup</span></div></div>
-   <div class="workbar"><h3>Daftar pekerjaan</h3><label class="issue-search"><input id="issue-search" aria-label="Cari issue" placeholder="Cari judul atau nomor issue..." value="${esc(S.issueQuery)}"></label></div>
+   <div class="workbar"><h3>Daftar pekerjaan</h3><button data-act="toggle-closed">${S.showClosed?"Sembunyikan issue selesai":"Tampilkan issue selesai"}</button><label class="issue-search"><input id="issue-search" aria-label="Cari issue" placeholder="Cari judul atau nomor issue..." value="${esc(S.issueQuery)}"></label></div>
    <div class="chips">${chips.map(([k,l,c])=>`<button class="chip" data-chip="${k}" aria-pressed="${S.filter===k}">${esc(l)}: ${c}</button>`).join('')}</div>
    <div id="work-items">${list.map(row).join('')||'<p class="mute">Tidak ada issue sesuai filter.</p>'}</div>
    <section id="branch-panel" class="branch-panel" aria-label="Manajemen branch"></section>`;
@@ -348,7 +371,7 @@ function row(i){
     <div><button class="go" data-act="prompt">Buat prompt untuk ChatGPT</button></div>
     <div data-p hidden><textarea rows="8" readonly data-prompt></textarea><button data-act="copy" data-sel="[data-prompt]">Salin prompt</button></div>
     <label>Balasan ChatGPT<textarea rows="6" data-reply placeholder="Tempel balasan lengkap, termasuk blok diff"></textarea></label>
-    <div><button class="go" data-act="apply">Terapkan dan uji</button></div>
+    <div><button class="go" data-act="apply">Terapkan patch</button></div>
     <pre data-res hidden></pre>
     <div data-f hidden><textarea rows="6" readonly data-follow></textarea><button data-act="copy" data-sel="[data-follow]">Salin prompt lanjutan</button></div>
     <div data-push hidden><button class="go" data-act="push">Push dan buat PR</button></div>
@@ -467,22 +490,20 @@ $('#view').onclick=async e=>{
   if(act==='branches-refresh')return refreshBranches(repo);
   if(act==='branch-delete')return openBranchDelete(repo,b.dataset.branch);
   if(act==='reload')return openRepo(repo);
+  if(act==='open-docker')return $('#nav-docker').click();
+  if(act==='toggle-closed'){S.showClosed=!S.showClosed;return drawMain()}
   if(act==='copy')return copy(q(b.dataset.sel));
-  if(act==='deploy'){
-    if(!confirm('Deploy '+repo+' dari branch utama dengan docker compose up -d --build?'))return;
-    const r=await run('Deploy',()=>api('/api/deploy','POST',{repo}));
-    if(r){const o=$('#deploy-out');o.hidden=false;o.textContent=r.output||'Selesai.'}return;
-  }
+  if(act==='deploy')return $('#nav-docker').click();
   if(act==='prompt'){
     const files=q('[data-files]').value.split(',').map(s=>s.trim()).filter(Boolean);
     const r=await run('Menyusun prompt',()=>api('/api/prompt','POST',{repo,issue:n,branch:q('[data-br]').value,files}));
     if(r){q('[data-p]').hidden=false;const t=q('[data-prompt]');t.value=r.prompt;copy(t);note('Prompt siap ('+r.chars+' karakter) dan sudah disalin. Tempel ke ChatGPT.')}return;
   }
   if(act==='apply'){
-    const r=await run('Menerapkan patch dan menguji',()=>api('/api/apply','POST',{repo,issue:n,reply:q('[data-reply]').value,branch:S.applied[repo+'#'+n]}),err=>{if(/patch tidak cocok|git apply gagal|patch failed|patch does not apply/i.test(String(err.message||'')))showPatchError(err)});
+    const r=await run('Menerapkan patch',()=>api('/api/apply','POST',{repo,issue:n,reply:q('[data-reply]').value,branch:S.applied[repo+'#'+n]}),err=>{if(/patch tidak cocok|git apply gagal|patch failed|patch does not apply/i.test(String(err.message||'')))showPatchError(err)});
     if(!r)return;S.applied[repo+'#'+n]=r.branch;S.open=n;
     const res=q('[data-res]');res.hidden=false;
-    res.textContent='Branch '+r.branch+' (commit '+r.commit+')\n'+(r.test?(r.test.ok?'Test lolos.':'Test GAGAL.')+'\n'+r.test.output:'TEST_CMD belum diatur, jadi tidak ada test otomatis.');
+    res.textContent='Branch '+r.branch+' (commit '+r.commit+')\n'+(r.test?(r.test.ok?'Test lolos.':'Test GAGAL.')+'\n'+r.test.output:'Patch tersimpan. Jalankan tes terpisah melalui Docker & QA; aplikasi production tidak diuji otomatis.');
     q('[data-push]').hidden=!(r.test?r.test.ok:true);
     q('[data-f]').hidden=!r.followup;if(r.followup)q('[data-follow]').value=r.followup;return;
   }
