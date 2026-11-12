@@ -84,9 +84,9 @@ def _runner(app, job):
                 expected_sha = None
             if expected_sha:
                 target_reason = "Bukti SHA GitHub tersedia"
-        except (AttributeError, KeyError, TypeError, ValueError, Exception):
+        except Exception:
             target_reason = "GitHub branch tidak dapat dibaca saat QA"
-        report(f"[Jembatan] Target deploy: {branch} ({expected_sha[:12] if expected_sha else 'belum diketahui'})\\n")
+        report(f"[Jembatan] Target deploy: {branch} ({expected_sha[:12] if expected_sha else 'belum diketahui'})\n")
         result = docker_control.run_qa(app, job["repo"], on_event=on_event)
         source_sha = result.get("source_sha")
         verified = bool(result["ok"] and expected_sha and
