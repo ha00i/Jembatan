@@ -5,72 +5,160 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Jembatan</title>
 <style>
-:root{--ink:#1B2430;--paper:#EDF0F2;--card:#fff;--line:#D3D9E0;--mute:#5D6B7A;--accent:#1F5F8B;--none:#8A94A0;--ready:#1F5F8B;--merged:#6B4FA3;--done:#2E7D4F;--bad:#B3392F;--code:#F3F5F7}
-@media (prefers-color-scheme:dark){:root{--ink:#E4E9EE;--paper:#141A21;--card:#1C242D;--line:#2E3946;--mute:#93A1B0;--accent:#6DB3E3;--none:#74808D;--ready:#6DB3E3;--merged:#B79CF0;--done:#5CC38A;--bad:#F08A80;--code:#242E39}}
+
+:root{
+ --page:#f5f6f4;--surface:#ffffff;--rail:#172633;--rail-border:#334754;
+ --ink:#1b2a32;--muted:#62727c;--line:#dce3e4;--accent:#08766d;
+ --accent-soft:#e4f3ef;--warning:#a96b08;--warning-soft:#fff3df;
+ --done:#26774e;--done-soft:#e6f4eb;--pending:#657582;--pending-soft:#eff2f4;
+ --review:#76539b;--review-soft:#f1eafa;--focus:#08766d;--code:#f3f6f6;
+ --radius:12px;
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
-code,pre,textarea{font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--page);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+code,pre,textarea{font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}
 button,input,select,textarea{font:inherit;color:inherit}
-button{cursor:pointer;border:1px solid var(--line);background:var(--card);border-radius:6px;padding:6px 12px}
-button:hover{border-color:var(--accent)}
-button.go{background:var(--accent);border-color:var(--accent);color:var(--card);font-weight:600}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-input,select,textarea{border:1px solid var(--line);background:var(--card);border-radius:6px;padding:6px 8px}
+button{cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:9px 13px;font-size:14px;line-height:1.35;font-weight:600}
+button:hover{border-color:var(--accent);color:var(--accent)}
+button.go{background:var(--accent);border-color:var(--accent);color:#fff}
+button.go:hover{background:#075c55}
+button.quiet{background:transparent}
+button.danger-outline{border-color:#d4ada8;color:#9b403a}
+button:disabled{opacity:.55;cursor:not-allowed}
+:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+input,select,textarea{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 12px;min-width:0}
+input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 textarea{width:100%;resize:vertical}
-.app{display:grid;grid-template-columns:310px 1fr;min-height:100vh}
-aside{border-right:1px solid var(--line);padding:18px 16px;background:var(--card);display:flex;flex-direction:column;gap:12px;max-height:100vh;position:sticky;top:0}
-h1{margin:0;font-size:22px;letter-spacing:-.02em}
-.sub{margin:0;color:var(--mute);font-size:13px}
-.row{display:flex;gap:6px}.row>input{flex:1;min-width:0}
-#repos{list-style:none;margin:0;padding:0;overflow:auto;flex:1}
-#repos li{display:flex;gap:6px;align-items:flex-start;padding:3px 0}
-#repos input{margin-top:9px}
-.repo{flex:1;text-align:left;border-color:transparent;background:none;display:flex;flex-direction:column;overflow-wrap:anywhere}
-.repo.on{background:var(--paper);border-color:var(--line)}
-.repo small{color:var(--mute)}
-main{padding:22px 26px;min-width:0}
-#note{white-space:pre-line;font-size:13px;color:var(--mute);min-height:20px}#note.bad{color:var(--bad)}
-.head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
-.head h2{margin:0;font-size:20px;overflow-wrap:anywhere}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
-.chip[aria-pressed=true]{background:var(--ink);color:var(--card);border-color:var(--ink)}
-details.is{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--none);border-radius:6px;margin-bottom:8px}
-details.is.ready{border-left-color:var(--ready)}details.is.merged_open{border-left-color:var(--merged)}details.is.done{border-left-color:var(--done)}
-summary{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:center;padding:10px 12px;cursor:pointer;list-style:none}
+a{color:var(--accent);text-underline-offset:3px}
+.app{display:grid;grid-template-columns:296px minmax(0,1fr);min-height:100dvh}
+aside{position:sticky;top:0;height:100dvh;min-height:560px;display:flex;flex-direction:column;gap:17px;background:var(--rail);color:#f1f6f6;padding:27px 20px 20px;overflow:hidden}
+.brand{display:flex;align-items:center;gap:12px}
+.bridge-symbol{display:grid;place-items:center;width:42px;height:42px;border:1px solid #608188;border-radius:12px;background:#213b48;color:#d4f3eb;font-weight:800;font-size:22px}
+.brand-text{min-width:0}
+.brand-text small{font-size:10px;letter-spacing:.16em;font-weight:750;color:#9bb8bc}
+h1{font-size:24px;line-height:1.2;letter-spacing:-.045em;margin:2px 0 0}
+.sub{color:#a5b9c1;font-size:13px;line-height:1.6;margin:0 0 4px}
+.rail-label{display:block;color:#a1b8c0;font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:750;margin-bottom:8px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row>input{flex:1;min-width:0}
+.auth-row{align-items:stretch;flex-wrap:nowrap}
+.auth-row input{width:100%;background:#223743;border-color:#47606b;color:white;font-size:13px;min-width:0}
+.auth-row input::placeholder{color:#a9bdc5}
+.auth-row button{flex:0 0 auto}
+aside button:not(.go){background:#213541;color:#e8eeee;border-color:#405662}
+aside button:not(.go):hover{background:#2b4450;border-color:#98c0bd}
+aside #q{width:100%;background:#223743;color:white;border-color:#47606b;font-size:14px}
+aside #q::placeholder{color:#a9bdc5}
+.sync-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sync-row button{min-width:0;padding:10px 6px;font-size:13px}
+#repos{list-style:none;margin:0;padding:0;overflow-y:auto;overscroll-behavior:contain;flex:1;min-height:68px}
+#repos li{display:flex;align-items:center;gap:7px;padding:3px 0}
+#repos input{width:17px;height:17px;accent-color:#70cabb;margin:0;flex:0 0 auto}
+.repo{flex:1;display:flex;align-items:flex-start;flex-direction:column;gap:3px;text-align:left;min-width:0;padding:10px 12px;border-color:transparent!important;background:transparent!important;overflow-wrap:anywhere;font-weight:600;font-size:13px}
+.repo.on{background:#2d4653!important;border-color:#5f8990!important}
+.repo small{font-size:11px;color:#a4bcc6;font-weight:400}
+.sidebar-foot{margin-top:auto;border-top:1px solid #40535e;padding-top:15px;display:grid;gap:13px}
+.sidebar-foot p{color:#abc2c7;margin:0;font-size:12px}
+.sidebar-foot button{width:100%}
+.mini-led{display:inline-block;width:8px;height:8px;border-radius:50%;background:#65ccb5;margin-right:7px}
+main{min-width:0}
+.topbar{min-height:70px;border-bottom:1px solid var(--line);background:var(--surface);display:flex;align-items:center;justify-content:space-between;gap:18px;padding:13px clamp(18px,3.4vw,44px)}
+.crumb{display:flex;gap:9px;align-items:center;font-size:13px;color:var(--muted)}
+.crumb strong{color:var(--ink);font-weight:700}
+.crumb span{color:#a3afb5}
+.connect-note{display:flex;align-items:center;gap:8px;color:#4e666f;font-size:12px;text-align:right}
+.connect-note .mini-led{margin:0}
+.content{padding:32px clamp(18px,3.4vw,44px) 60px;max-width:1500px;margin:auto}
+#note{white-space:pre-line;font-size:13px;color:var(--muted);min-height:21px;margin-bottom:12px}
+#note.bad{color:#9e403a}
+.welcome{max-width:950px;margin:7vh auto 0;padding:48px;border:1px solid var(--line);background:var(--surface);border-radius:16px}
+.eyebrow{display:block;text-transform:uppercase;letter-spacing:.14em;font-size:11px;font-weight:800;color:var(--accent);margin-bottom:12px}
+.welcome h2{font-size:clamp(26px,3vw,40px);line-height:1.14;letter-spacing:-.045em;max-width:650px;margin:0 0 14px}
+.welcome p{max-width:640px;color:var(--muted);margin:0}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:38px;padding-top:27px;border-top:1px solid var(--line)}
+.steps>div{display:grid;gap:5px;font-size:13px;color:var(--muted)}
+.steps strong{color:var(--ink);font-size:14px}
+.steps span{font-size:12px;color:var(--accent);font-weight:800;letter-spacing:.1em}
+.head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;margin:0 0 26px}
+.head h2{font-size:clamp(23px,2.2vw,34px);line-height:1.18;letter-spacing:-.04em;margin:0;overflow-wrap:anywhere}
+.head h2 span{display:block;font-size:13px;letter-spacing:0;color:var(--muted);font-weight:450;margin-top:8px}
+.head .row{justify-content:flex-end}
+.context-note{margin:-10px 0 24px;color:var(--muted);font-size:13px}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 23px}
+.metric{display:grid;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;min-width:0}
+.metric .value{font-size:32px;line-height:1;letter-spacing:-.04em;font-variant-numeric:tabular-nums;font-weight:750}
+.metric .meta{font-size:12px;line-height:1.4;color:var(--muted);font-weight:550}
+.metric .marker{width:23px;height:3px;border-radius:4px;background:var(--pending)}
+.metric.review .marker{background:var(--accent)}
+.metric.merged .marker{background:var(--review)}
+.metric.done .marker{background:var(--done)}
+.workbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;margin:0 0 13px}
+.workbar h3{margin:0;font-size:17px;letter-spacing:-.015em}
+.issue-search{display:block;flex:0 1 270px;max-width:100%}
+.issue-search input{width:100%;font-size:13px;background:var(--surface)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
+.chip{font-size:12px;padding:8px 12px;border-radius:7px;background:transparent;color:var(--muted)}
+.chip[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:#fff}
+#work-items{display:grid;gap:10px}
+details.is{border:1px solid var(--line);border-left:4px solid var(--pending);background:var(--surface);border-radius:10px;overflow:hidden}
+details.is.ready{border-left-color:var(--accent)}
+details.is.merged_open{border-left-color:var(--review)}
+details.is.done{border-left-color:var(--done)}
+summary{display:grid;grid-template-columns:72px minmax(0,1fr) auto;gap:6px 15px;padding:17px 19px;align-items:center;list-style:none;cursor:pointer}
 summary::-webkit-details-marker{display:none}
-.n{color:var(--mute)}.t{overflow-wrap:anywhere}
-.bar{display:flex;gap:3px}.bar i{width:22px;height:6px;border-radius:3px;background:var(--line)}
-.is.none .bar i.on{background:var(--none)}.is.ready .bar i.on{background:var(--ready)}.is.merged_open .bar i.on{background:var(--merged)}.is.done .bar i.on{background:var(--done)}
-.l{grid-column:2/4;font-size:13px;color:var(--mute)}
-.body{padding:4px 14px 14px;display:grid;gap:10px;border-top:1px solid var(--line)}
-.body ul{margin:6px 0;padding-left:18px}
-pre{background:var(--code);border-radius:6px;padding:10px;overflow:auto;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
-.mute{color:var(--mute)}.bad{color:var(--bad)}
-h3{margin:18px 0 6px;font-size:16px}
+summary:hover{background:#fafbfa}
+details[open]>summary{background:#f8faf9}
+.n{font:650 13px/1.5 ui-monospace,Consolas,monospace;color:var(--muted)}
+.t{font-size:14px;font-weight:700;overflow-wrap:anywhere}
+.bar{display:flex;gap:3px}
+.bar i{width:15px;height:5px;border-radius:4px;background:#dfe6e6}
+.is.none .bar i.on{background:var(--pending)}
+.is.ready .bar i.on{background:var(--accent)}
+.is.merged_open .bar i.on{background:var(--review)}
+.is.done .bar i.on{background:var(--done)}
+.l{grid-column:2/4;font-size:12px;color:var(--muted)}
+.body{display:grid;gap:16px;padding:20px;border-top:1px solid var(--line);background:var(--surface)}
+.body p{margin:0;font-size:13px}
+.body label{font-weight:650;font-size:13px;display:grid;gap:8px}
+.body select,.body input{font-size:13px}
+.body ul{margin:0;padding-left:22px;color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.body .row{align-items:stretch}
+.body .row select{flex:1 1 300px}
+.body .row input{flex:1 1 230px}
+.body .go{min-height:39px}
+.flow-hint{display:flex;flex-wrap:wrap;gap:7px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;color:var(--muted);background:#f9fbfa;font-size:11px;font-weight:650}
+.flow-hint span:not(:last-child)::after{content:"→";margin-left:10px;color:#9aa6a7}
+pre{padding:15px;background:var(--code);border:1px solid var(--line);border-radius:9px;white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;margin:0;max-height:380px}
+.mute{color:var(--muted)}
+.bad{color:#a53f39}
+h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
 [hidden]{display:none!important}
-@media (max-width:820px){.app{grid-template-columns:1fr}aside{position:static;max-height:none;border-right:0;border-bottom:1px solid var(--line)}#repos{max-height:240px}main{padding:16px}}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media(max-width:1100px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.app{grid-template-columns:270px minmax(0,1fr)}}
+@media(max-width:820px){.app{grid-template-columns:minmax(0,1fr)}aside{height:auto;min-height:0;max-height:none;position:static;gap:13px;padding:17px 19px}.brand-text small{font-size:9px}h1{font-size:22px}#repos{flex:none;max-height:145px}.sidebar-foot{grid-template-columns:1fr auto;align-items:center;gap:8px;margin:0}.sidebar-foot button{width:auto}.topbar{min-height:55px}.content{padding-top:23px}.welcome{margin:0;padding:28px}.steps{margin-top:26px}}
+@media(max-width:540px){.topbar{align-items:flex-start;flex-direction:column;gap:6px}.connect-note{text-align:left}.metrics{gap:8px}.metric{padding:13px}.metric .value{font-size:27px}.head .row{width:100%;justify-content:flex-start}.head .row button{flex:1}summary{grid-template-columns:46px minmax(0,1fr);gap:6px 9px;padding:14px}.bar{grid-column:2;grid-row:3}.l{grid-column:2}.body{padding:15px}.steps{grid-template-columns:1fr}.workbar{align-items:stretch}.issue-search{flex:1 1 100%}.auth-row button{padding-inline:13px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@media(forced-colors:active){.repo.on,button.go,.chip[aria-pressed=true]{outline:2px solid ButtonText}}
+
 </style>
 </head>
 <body>
 <div class="app">
 <aside>
-  <div><h1>Jembatan</h1><p class="sub">Menghubungkan repo GitHub, chat ChatGPT, dan Docker di servermu.</p></div>
-  <div class="row"><input id="tok" type="password" placeholder="GitHub token" autocomplete="current-password" aria-label="GitHub token"><button id="login" class="go">Masuk</button></div>
-  <input id="q" placeholder="Cari repo" aria-label="Cari repo">
-  <div class="row"><button id="all">Pilih semua</button><button id="sync" class="go">Sinkron terpilih</button></div>
+  <div class="brand"><div class="bridge-symbol" aria-hidden="true">J</div><div class="brand-text"><small>DEVELOPMENT CONTROL</small><h1>Jembatan</h1></div></div><p class="sub">GitHub, ChatGPT manual, dan deployment. Satu tempat untuk mengawal pekerjaan.</p>
+  <div><label class="rail-label" for="tok">Akses workspace</label><div class="row auth-row"><input id="tok" type="password" placeholder="Token akses UI" autocomplete="off"><button id="login" class="go">Masuk</button></div></div>
+  <div><label class="rail-label" for="q">Repository</label><input id="q" placeholder="Cari repository..." autocomplete="off"></div>
+  <div class="sync-row"><button id="all">Pilih semua</button><button id="sync" class="go">Sinkron</button></div>
   <ul id="repos"></ul>
+  <div class="sidebar-foot"><p><span class="mini-led" aria-hidden="true"></span>Tanpa API model berbayar</p><button id="logout" class="quiet">Keluar</button></div>
 </aside>
-<main>
-  <div id="note" role="status" aria-live="polite"></div>
-  <div id="view"><p class="mute">Masukkan GitHub token yang sama dengan di server, lalu pilih repo di kiri. Repo yang belum tersinkron perlu dicentang dan disinkron dulu.</p></div>
-</main>
+<main><header class="topbar"><div class="crumb"><strong>Workspace</strong><span>/</span>Operasi repository</div><div class="connect-note"><span class="mini-led" aria-hidden="true"></span>ChatGPT manual · Eksekusi GitHub lokal</div></header><section class="content"><div id="note" role="status" aria-live="polite"></div><div id="view"><div class="welcome"><span class="eyebrow">Mulai dari repository</span><h2>Satu kendali untuk setiap issue dan branch.</h2><p>Pilih repository di panel kiri. Jembatan akan membantu meninjau hubungan issue, commit, dan branch tanpa memerlukan API ChatGPT berbayar.</p><div class="steps"><div><span>01</span><strong>Sinkronkan repository</strong>Ambil branch dan issue dari GitHub.</div><div><span>02</span><strong>Kerjakan lewat ChatGPT</strong>Salin prompt, lalu tempel patch hasil analisis.</div><div><span>03</span><strong>Uji dan kirim PR</strong>Periksa hasil QA sebelum merge dan deploy.</div></div></div></div></section></main>
 </div>
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const ST={none:['Belum ada pekerjaan',1],ready:['Ada commit di branch, siap ditinjau dan merge',2],merged_open:['Sudah masuk ke branch utama, issue masih terbuka',3],done:['Selesai (issue ditutup)',4]};
-let tok=localStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},filter:'all'};
+const ST={none:['Belum ada pekerjaan',1],ready:['Commit ditemukan · perlu validasi QA',2],merged_open:['Terindikasi di main · issue masih terbuka',3],done:['Issue ditutup · verifikasi QA terpisah',4]};
+let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},filter:'all',issueQuery:''};
 $('#tok').value=tok;
 
 async function api(p,m='GET',b){
@@ -82,7 +170,9 @@ const note=(t,bad)=>{const n=$('#note');n.textContent=t;n.className=bad?'bad':''
 async function run(label,fn){note(label+'...');try{const r=await fn();note('');return r}catch(e){note(e.message,1)}}
 function copy(el){el.select();try{navigator.clipboard.writeText(el.value)}catch(_){document.execCommand('copy')}}
 
-$('#login').onclick=()=>{tok=$('#tok').value.trim();localStorage.setItem('jb-token',tok);loadRepos()};
+$('#login').onclick=()=>{tok=$('#tok').value.trim();if(!tok)return note('Masukkan token akses terlebih dahulu.',1);sessionStorage.setItem('jb-token',tok);loadRepos()};
+$('#logout').onclick=()=>{sessionStorage.removeItem('jb-token');location.reload()};
+$('#tok').onkeydown=e=>{if(e.key==='Enter')$('#login').click()};
 $('#q').oninput=drawRepos;
 $('#all').onclick=()=>document.querySelectorAll('#repos input').forEach(i=>i.checked=true);
 $('#sync').onclick=async()=>{
@@ -100,20 +190,22 @@ function drawRepos(){
 $('#repos').onclick=e=>{const b=e.target.closest('[data-open]');if(b)openRepo(b.dataset.open)};
 
 async function openRepo(n){
-  S.repo=n;S.filter='all';drawRepos();
+  S.repo=n;S.filter='all';S.issueQuery='';drawRepos();
   const d=await run('Membaca branch dan issue',()=>api('/api/overview?repo='+encodeURIComponent(n)));
   if(d){S.data=d;drawMain()}
 }
 function drawMain(){
   const d=S.data,cnt=k=>d.issues.filter(i=>i.status===k).length;
   const chips=[['all','Semua',d.issues.length],...Object.entries(ST).map(([k,v])=>[k,v[0].split(',')[0],cnt(k)])];
-  const list=d.issues.filter(i=>S.filter==='all'||i.status===S.filter);
+  const list=d.issues.filter(i=>(S.filter==='all'||i.status===S.filter)&&(!S.issueQuery||(i.title+' #'+i.number).toLowerCase().includes(S.issueQuery.toLowerCase())));
   $('#view').innerHTML=`
    <div class="head"><h2>${esc(d.repo)} <span class="mute">(utama: ${esc(d.base)})</span></h2>
-    <div class="row"><button data-act="reload">Muat ulang</button><button data-act="deploy">Deploy dengan Docker</button></div></div>
-   <pre id="deploy-out" hidden></pre>
+    <div class="row"><button data-act="reload">Muat ulang</button><button class="danger-outline" data-act="deploy">Deploy dari main</button></div></div>
+   <p class="context-note">Status adalah indikasi dari nama branch dan pesan commit, bukan bukti QA atau persetujuan merge.</p><pre id="deploy-out" hidden></pre>
+   <div class="metrics"><div class="metric"><span class="marker"></span><span class="value">${cnt('none')}</span><span class="meta">Belum ditangani</span></div><div class="metric review"><span class="marker"></span><span class="value">${cnt('ready')}</span><span class="meta">Perlu validasi</span></div><div class="metric merged"><span class="marker"></span><span class="value">${cnt('merged_open')}</span><span class="meta">Diduga sudah di main</span></div><div class="metric done"><span class="marker"></span><span class="value">${cnt('done')}</span><span class="meta">Issue ditutup</span></div></div>
+   <div class="workbar"><h3>Daftar pekerjaan</h3><label class="issue-search"><input id="issue-search" aria-label="Cari issue" placeholder="Cari judul atau nomor issue..." value="${esc(S.issueQuery)}"></label></div>
    <div class="chips">${chips.map(([k,l,c])=>`<button class="chip" data-chip="${k}" aria-pressed="${S.filter===k}">${esc(l)}: ${c}</button>`).join('')}</div>
-   ${list.map(row).join('')||'<p class="mute">Tidak ada issue di kelompok ini.</p>'}
+   <div id="work-items">${list.map(row).join('')||'<p class="mute">Tidak ada issue sesuai filter.</p>'}</div>
    <h3>Branch yang tidak menyebut issue apa pun</h3>
    ${d.orphans.length?`<ul>${d.orphans.map(b=>`<li><code>${esc(b.name)}</code>: ${b.ahead} commit di depan, ${b.behind} tertinggal${b.merged?', sudah masuk':''} (${esc(b.date)})</li>`).join('')}</ul>`:'<p class="mute">Tidak ada.</p>'}`;
 }
@@ -123,7 +215,7 @@ function row(i){
   return `<details class="is ${i.status}" data-n="${i.number}"${open}>
    <summary><span class="n">#${i.number}</span><span class="t">${esc(i.title)}</span>
     <span class="bar" title="${esc(lbl)}">${[1,2,3,4].map(x=>`<i${x<=k?' class="on"':''}></i>`).join('')}</span><span class="l">${esc(lbl)}</span></summary>
-   <div class="body">
+   <div class="body"><div class="flow-hint"><span>Buat prompt</span><span>Terapkan patch</span><span>Jalankan QA</span><span>Kirim PR</span></div>
     <p><a href="${esc(i.url)}" target="_blank" rel="noopener">Buka issue di GitHub</a></p>
     ${i.branches.length?`<ul>${i.branches.map(b=>`<li><code>${esc(b.name)}</code>: ${b.ahead} commit di depan, ${b.behind} tertinggal${b.merged?', sudah masuk':''} (${esc(b.date)})</li>`).join('')}</ul>`:'<p class="mute">Belum ada branch atau commit yang menyebut issue ini.</p>'}
     ${i.merge_cmd?`<label>Perintah merge (jalankan setelah ditinjau dan test lolos)<textarea rows="3" readonly data-merge>${esc(i.merge_cmd)}</textarea></label><div><button data-act="copy" data-sel="[data-merge]">Salin perintah merge</button></div>`:''}
@@ -137,6 +229,7 @@ function row(i){
     <div data-push hidden><button class="go" data-act="push">Push dan buat PR</button></div>
    </div></details>`;
 }
+$('#view').oninput=e=>{if(e.target.id==='issue-search'){S.issueQuery=e.target.value;const rows=S.data.issues.filter(i=>(S.filter==='all'||i.status===S.filter)&&(!S.issueQuery||(i.title+' #'+i.number).toLowerCase().includes(S.issueQuery.toLowerCase())));$('#work-items').innerHTML=rows.map(row).join('')||'<p class="mute">Tidak ada issue sesuai filter.</p>';}};
 $('#view').onclick=async e=>{
   const c=e.target.closest('[data-chip]');if(c){S.filter=c.dataset.chip;return drawMain()}
   const b=e.target.closest('[data-act]');if(!b)return;
