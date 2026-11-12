@@ -310,10 +310,41 @@ def docker_action(func, *args):
     except docker_control.DockerError as e:
         raise Err(str(e), e.code) from e
 
+def deployment_target(r):
+    settings = docker_action(docker_control._app_settings, r)
+    branch = settings.get("deploy_branch", "main")
+    if branch not in ("main", "staging"):
+        raise Err("Branch target deployment tidak didukung", 409)
+    remote = gh(f"/repos/{r}/branches/{branch}")
+    sha = (remote.get("commit") or {}).get("sha", "")
+    if not re.fullmatch(r"[a-fA-F0-9]{40}", sha):
+        raise Err("GitHub belum memberikan SHA commit yang valid", 502)
+    return branch, sha, settings
+
+
+def deploy_readiness(r):
+    branch, sha, settings = deployment_target(r)
+    try:
+        proof = docker_action(qa_jobs.require_verified, r, branch, sha)
+        return {"repo": r, "branch": branch, "sha": sha,
+                "qa_ready": True, "qa_job_id": proof["qa_job_id"],
+                "deploy_path": settings["deploy_path"], "reason": "QA PASS untuk SHA target."}
+    except Err as error:
+        if error.code != 409:
+            raise
+        return {"repo": r, "branch": branch, "sha": sha,
+                "qa_ready": False, "qa_job_id": None,
+                "deploy_path": settings["deploy_path"], "reason": str(error)}
+
+
 def deploy(r, confirm):
     if qa_jobs.active():
         raise Err("Deployment ditunda: QA masih berjalan. Tunggu hasil QA selesai.", 409)
-    return docker_action(docker_control.deploy, r, confirm)
+    if confirm != r:
+        raise Err("Konfirmasi deploy harus nama repository persis", 409)
+    branch, sha, _ = deployment_target(r)
+    docker_action(qa_jobs.require_verified, r, branch, sha)
+    return docker_action(docker_control.deploy, r, confirm, branch, sha)
 
 def legacy_qa(r):
     if qa_jobs.active():
@@ -351,6 +382,7 @@ ROUTES = {
         qa_jobs.start, b["repo"]),
     ("GET", "/api/docker/qa/status"): lambda q, b: docker_action(
         qa_jobs.status, q["repo"]),
+    ("GET", "/api/deploy/readiness"): lambda q, b: deploy_readiness(q["repo"]),
     ("POST", "/api/deploy"): lambda q, b: deploy(b["repo"], b["confirm"]),
 }
 
