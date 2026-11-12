@@ -765,8 +765,55 @@ async function refreshDocker(){
   const cfg=await run('Memuat pengaturan Docker',()=>api(endpoint));
   if(S.page!=='docker'||repo!==S.repo)return;
   if(!cfg){$('#docker-view').textContent='Pengaturan Docker gagal dimuat.';return}
+  S.deployBranches=null;
   S.dockerCfg=cfg;drawDocker();
-  if(repo){startQaPoll(repo);refreshDeployReadiness(repo)}
+  if(repo){
+    refreshDeployBranches(repo);
+    startQaPoll(repo);
+    refreshDeployReadiness(repo);
+  }
+}
+function renderDeployBranchChoices(){
+  const select=$('#docker-deploy-branch');
+  if(!select)return;
+  const repo=S.repo,info=S.deployBranches?.repo===repo?S.deployBranches:null;
+  const current=S.dockerCfg?.app?.deploy_branch||'main';
+  const hint=$('#docker-branch-hint');
+  if(!repo||!info){
+    select.innerHTML='<option value="">Memeriksa branch GitHub...</option>';
+    select.disabled=true;
+    if(hint)hint.textContent='Mengambil daftar branch yang tersedia dari GitHub.';
+    return;
+  }
+  const available=info.available||[];
+  const missing=!!current&&!available.includes(current);
+  const stale=missing?'<option value="'+esc(current)+'" disabled selected>'+
+    esc(current)+' (tidak ditemukan)</option>':'';
+  const options=available.map(name=>'<option value="'+esc(name)+'"'+
+    (name===current?' selected':'')+'>'+esc(name)+
+    (name===info.default_branch?' (default)':'')+'</option>').join('');
+  select.innerHTML=stale+options||
+    '<option value="" disabled selected>Tidak ada main/staging</option>';
+  select.disabled=!!S.dockerOperation||!available.length;
+  if(hint)hint.textContent=missing?
+    'Branch '+current+' sudah tidak tersedia. Pilih branch dari daftar, lalu klik Simpan aplikasi.':
+    available.length?'Tersedia di GitHub: '+available.join(', ')+'.':
+    'Repository ini tidak memiliki branch main atau staging. Deployment diblokir.';
+}
+async function refreshDeployBranches(repo){
+  if(!repo||S.repo!==repo)return;
+  try{
+    const data=await api('/api/deploy/branches?repo='+encodeURIComponent(repo));
+    if(S.repo!==repo)return;
+    S.deployBranches=data;
+    renderDeployBranchChoices();
+  }catch(error){
+    if(S.repo!==repo)return;
+    S.deployBranches=null;
+    renderDeployBranchChoices();
+    const hint=$('#docker-branch-hint');
+    if(hint)hint.textContent='Gagal membaca branch GitHub: '+error.message;
+  }
 }
 async function refreshDeployReadiness(repo){
   if(!repo||S.repo!==repo)return;
@@ -780,7 +827,8 @@ async function refreshDeployReadiness(repo){
     S.deployReadiness=data;
     if(box)box.className='deploy-readiness '+(data.qa_ready?'ready':'blocked');
     if(label)label.textContent=data.qa_ready?'QA terverifikasi untuk deploy':'Deploy belum siap';
-    if(info)info.textContent='Branch '+data.branch+' · '+data.sha.slice(0,12)+' — '+data.reason;
+    if(info)info.textContent='Branch '+data.branch+
+      (data.sha?' · '+data.sha.slice(0,12):' · belum tersedia')+' — '+data.reason;
   }catch(e){
     if(S.repo!==repo)return;
     S.deployReadiness=null;
@@ -814,9 +862,9 @@ function drawDocker(){
    '<input id="docker-qa-container" placeholder="vortex-qa-qa-app-1" value="'+esc(app.qa_container||'')+'"'+disabled+'>',
    '<label for="docker-qa-profile">Jenis tes</label><select id="docker-qa-profile"'+disabled+'>',
    '<option value="">Pilih profil QA</option>'+profiles+'</select>',
-   '<label for="docker-deploy-branch">Branch untuk deploy</label><select id="docker-deploy-branch"'+disabled+'>', 
-   '<option value="main"'+((app.deploy_branch||'main')==='main'?' selected':'')+'>main (production)</option>',
-   '<option value="staging"'+(app.deploy_branch==='staging'?' selected':'')+'>staging</option></select>',
+   '<label for="docker-deploy-branch">Branch untuk deploy</label><select id="docker-deploy-branch" disabled>',
+   '<option value="">Memeriksa branch GitHub...</option></select>',
+   '<p class="docker-caption" id="docker-branch-hint" role="status">Hanya branch yang benar-benar ada di GitHub.</p>',
    '<label for="docker-deploy-path">Path Compose aplikasi</label>',
    '<input id="docker-deploy-path" placeholder="/srv/apps/project" value="'+esc(app.deploy_path||'')+'"'+disabled+'>',
    '<div class="row"><button data-docker="save-app"'+disabled+'>Simpan aplikasi</button>',
@@ -834,9 +882,16 @@ function drawDocker(){
   ].join('');
   $('#docker-view').innerHTML=html;
   renderDockerActivity();
+  renderDeployBranchChoices();
 }
 $('#docker-view').onchange=e=>{
   if(e.target&&e.target.id==='docker-mode')$('#docker-ssh-fields').hidden=e.target.value!=='ssh';
+  if(e.target&&e.target.id==='docker-deploy-branch'){
+    const label=$('#deploy-ready-label'),detail=$('#deploy-ready-detail');
+    if(label)label.textContent='Branch belum disimpan';
+    if(detail)detail.textContent='Klik Simpan aplikasi setelah memilih '+e.target.value+' untuk memperbarui target deploy.';
+    S.deployReadiness=null;
+  }
 };
 $('#docker-view').onclick=async e=>{
   const fill=e.target.closest('[data-qa-fill]');
@@ -877,11 +932,21 @@ $('#docker-view').onclick=async e=>{
   }
   if(!repo)return note('Pilih repository dulu.',1);
   if(act==='save-app'){
+    const branch=$('#docker-deploy-branch').value;
+    if(!S.deployBranches?.available?.includes(branch)){
+      notify('Pilih branch GitHub yang tersedia sebelum menyimpan aplikasi.','warning','Branch belum valid');
+      return;
+    }
     const body={repo,qa_container:$('#docker-qa-container').value.trim(),
       qa_profile:$('#docker-qa-profile').value,deploy_branch:$('#docker-deploy-branch').value,
       deploy_path:$('#docker-deploy-path').value.trim()};
     const r=await run('Menyimpan aplikasi',()=>api('/api/docker/app','POST',body));
-    if(r){S.dockerCfg.app=r;note('Pengaturan aplikasi disimpan.');refreshDeployReadiness(repo)}
+    if(r){
+      S.dockerCfg.app=r;
+      note('Pengaturan aplikasi disimpan.');
+      refreshDeployBranches(repo);
+      refreshDeployReadiness(repo);
+    }
     return;
   }
   if(act==='qa'){
