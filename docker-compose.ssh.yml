@@ -1,0 +1,6 @@
+services:
+  jembatan:
+    volumes:
+      # Gunakan hanya jika memilih Remote SSH; jangan mount ~/.ssh utama.
+      # Direktori ini harus berisi key khusus + known_hosts yang diverifikasi.
+      - ${JEMBATAN_SSH_DIR:?Set JEMBATAN_SSH_DIR dengan path direktori SSH khusus}:/root/.ssh:ro
