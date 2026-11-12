@@ -63,6 +63,17 @@ Tiap transisi menyimpan waktu, actor, repo, issue, branch, HEAD SHA, output/log 
 - Log frontend dan server menampilkan progres per pekerjaan; restart mempertahankan state.
 - Mobile 360px, tablet 768px dan desktop 1280px diuji, termasuk keyboard dan aksesibilitas.
 
+## Penyesuaian untuk server production lokal 8 GB / 4 core
+
+Keputusan lintas modul: pengujian **tidak** dijalankan dengan socket Docker
+production. Rancangan QA rootless terpisah, production guard berbasis resource,
+dan urutan instalasi aman didefinisikan dalam
+[SAFE-RUNNER-ARCHITECTURE.md](SAFE-RUNNER-ARCHITECTURE.md)
+serta [SAFE-RUNNER-EXECUTION-PLAN.md](SAFE-RUNNER-EXECUTION-PLAN.md).
+Kedua dokumen berstatus **desain / belum diimplementasikan**.
+Implementasi existing `TEST_CMD` dan `docker.sock` harus dianggap legacy
+berisiko hingga workstream separation of privilege selesai.
+
 ## Urutan implementasi
 
 **P0:** secret separation, isolated QA runner, persistent events, server-side gate. **P1:** multi-repo dashboard dan per-issue workflow, safe PR + merge. **P2:** deploy healthchecks, rollback, live progress, audit ekspor. Hindari menggabungkan P0–P2 dalam satu perubahan tanpa QA.
