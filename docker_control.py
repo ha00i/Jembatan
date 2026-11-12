@@ -109,6 +109,7 @@ def _app_settings(app, repo):
         "qa_container": current.get("qa_container", ""),
         "qa_profile": current.get("qa_profile", ""),
         "deploy_path": current.get("deploy_path", app.DEPLOY_MAP.get(repo, "")),
+        "deploy_branch": current.get("deploy_branch", "main"),
     }
 
 
@@ -130,6 +131,9 @@ def save_app(app, body):
     container = body.get("qa_container", "")
     profile = body.get("qa_profile", "")
     deploy_path = body.get("deploy_path", "")
+    deploy_branch = body.get("deploy_branch", "main")
+    if deploy_branch not in ("main", "staging"):
+        raise DockerError("Branch deploy hanya boleh main atau staging")
     if not isinstance(container, str) or (container and not NAME_RE.fullmatch(container)):
         raise DockerError("Nama container QA tidak valid")
     if container and not QA_NAME_RE.search(container):
@@ -146,7 +150,7 @@ def save_app(app, body):
         raise DockerError("Path deploy tidak valid")
     cfg = load(app)
     cfg["apps"][repo] = {"qa_container": container, "qa_profile": profile,
-                         "deploy_path": deploy_path}
+                         "deploy_path": deploy_path, "deploy_branch": deploy_branch}
     _atomic_config(_cfg_path(app), cfg)
     return _app_settings(app, repo)
 
@@ -261,14 +265,43 @@ def run_qa(app, repo, on_event=None):
     if on_event:
         on_event("stage", "Menjalankan " + QA_PROFILES[profile][0])
         on_event("output", "[Jembatan] Container: " + name + "\n[Jembatan] Profil: " + profile + "\n[Jembatan] Perintah: " + " ".join(command) + "\n\n")
+    source_sha = None
+    source_clean = False
+    source_reason = "Bukti SHA tidak tersedia pada QA sinkron lama"
+    if on_event:
+        # We do not pretend a test proves which commit ran if the QA checkout
+        # lacks a Git HEAD or has modified tracked source files.
+        try:
+            source_sha = _docker(app, "exec", name, "git", "rev-parse", "--verify", "HEAD", timeout=12).strip()
+            dirty = _docker(app, "exec", name, "git", "status", "--porcelain",
+                            "--untracked-files=no", timeout=12).strip()
+            source_clean = bool(re.fullmatch(r"[a-fA-F0-9]{40}", source_sha)) and not dirty
+            source_reason = ("Git HEAD dan tracked files QA valid" if source_clean else
+                             "Checkout QA tidak bersih atau SHA Git tidak valid")
+        except DockerError:
+            source_reason = "Container QA tidak memiliki Git checkout yang dapat diverifikasi"
+        on_event("output", "[Jembatan] Bukti sumber QA: " + source_reason + "\\n")
     try:
         if on_event:
             out = _docker(app, "exec", name, *command, timeout=300,
                           on_chunk=lambda text: on_event("output", text))
         else:
             out = _docker(app, "exec", name, *command, timeout=300)
+        if on_event and source_clean:
+            try:
+                after_sha = _docker(app, "exec", name, "git", "rev-parse", "--verify", "HEAD", timeout=12).strip()
+                after_dirty = _docker(app, "exec", name, "git", "status", "--porcelain",
+                                      "--untracked-files=no", timeout=12).strip()
+                source_clean = after_sha == source_sha and not after_dirty
+                if not source_clean:
+                    source_reason = "Git SHA/tracked files berubah selama tes"
+            except DockerError:
+                source_clean = False
+                source_reason = "Git checkout QA tidak dapat diperiksa sesudah tes"
         return {"repo": repo, "container": name, "profile": profile,
-                "ok": True, "output": out[-8000:]}
+                "ok": True, "output": out[-8000:],
+                "source_sha": source_sha if source_clean else None,
+                "source_verified": source_clean, "source_reason": source_reason}
     except DockerError as e:
         if e.code not in (502, 504):
             raise
