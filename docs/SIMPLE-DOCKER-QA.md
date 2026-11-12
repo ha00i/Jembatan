@@ -1,5 +1,42 @@
 # Jembatan — Docker & QA sederhana
 
+## Panduan deployment terkini (menggantikan alur deploy lama di bawah)
+
+**Alur nyata:** pilih repo → atur `deploy_branch=main` atau `staging` →
+pilih QA container Git checkout yang sama → jalankan QA → periksa kesiapan →
+konfirmasi repo → Git fetch/pull --ff-only → verifikasi SHA setelah pull →
+Compose build/up → Compose healthcheck.
+
+**Gate server-side wajib:**
+1. GitHub branch target mengembalikan commit SHA valid.
+2. QA job terakhir PASS untuk repo + container + profil yang sama, dengan
+   `git rev-parse HEAD` dan tracked files clean pada container QA sebelum
+   dan setelah tes, serta SHA sama dengan commit branch target saat QA.
+3. SHA GitHub branch target saat deploy sama dengan SHA yang diuji.
+4. Folder deployment punya Git origin yang cocok, tidak dirty, berada di
+   branch target, dan HEAD setelah git pull persis sama dengan SHA QA.
+5. Docker Compose hanya berjalan setelah semua gate lulus.
+
+**Bila QA PASS tetapi tidak ada Git checkout di container:** readiness menolak
+deploy. Ini sengaja, karena hasil tes saja tidak membuktikan kode yang diuji.
+Gunakan QA environment yang menyimpan Git checkout untuk commit tersebut.
+QA bisa dibangun dari branch target, tetapi pastikan tidak ada akses ke database
+production atau volume production. QA/production masih satu daemon Docker; ini
+tidak setara sandbox VM untuk kode tidak tepercaya.
+
+**Healthcheck:** status `healthy` hanya jika semua service Compose yang
+terdeteksi menyatakan healthy. Service yang tidak punya healthcheck dilaporkan
+`unverified`; bukan kegagalan deployment, tetapi operator harus memastikan
+kesehatan aplikasi manual. Status `unhealthy` berarti deploy harus diperiksa.
+Tidak ada rollback otomatis.
+
+**API terbaru:** `GET /api/deploy/readiness?repo=owner/name` adalah preflight
+read-only; `POST /api/deploy` memverifikasi ulang secara server-side.
+`POST /api/docker/app` kini menyimpan `deploy_branch` (`main`/`staging`).
+Bukti QA job di backend in-memory: restart Jembatan menghapus gate PASS.
+
+---
+
 **Status:** implementasi dashboard / endpoint tersedia melalui PR ini; pengujian pada server pengguna belum dijalankan. Untuk server production dengan banyak container, mulai dari **Local Docker**. Jangan melakukan restart atau build production hanya untuk mengetes koneksi.
 
 ## Alur harian dalam satu tempat
