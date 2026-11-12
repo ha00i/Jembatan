@@ -36,7 +36,7 @@ Pada Docker & QA kamu bisa:
 - QA tidak boleh memakai container production; backend hanya menerima container yang namanya menunjukkan QA, running, non-privileged, dan bukan host-network. Pastikan database/volume juga memang terpisah.
 - Deployment hanya pada path mapping dan branch target (main/staging) yang telah disetujui.
 - **Satu issue → satu branch tetap** `bridge/issue-N`, PR terbuka dipakai kembali, issue closed tersembunyi kecuali dibuka.
-- Untuk branch lama yang sudah merged: tombol **Hapus semua branch aman** dengan konfirmasi nama repository dan verifikasi SHA ulang.
+- Untuk branch lama yang sudah merged: klik **Hapus** pada branch atau **Hapus semua branch aman**. Dialog konfirmasi sekarang cukup **Hapus / Batal**, tanpa mengetik; SHA, proteksi branch, dan bukti merge tetap diperiksa ulang oleh backend.
 
 Baca [panduan Docker & QA](docs/SIMPLE-DOCKER-QA.md). Tidak ada API AI berbayar,
 auto-merge, auto-deploy, atau klaim bahwa QA pada container existing telah
