@@ -6,6 +6,12 @@ import qa_jobs
 
 
 class QARoutesTests(unittest.TestCase):
+    def test_bridge_rejects_traversal_repo_names(self):
+        for repo in ("../another-repo", "owner/..", "./foo", "owner/."):
+            with self.subTest(repo=repo):
+                with self.assertRaisesRegex(bridge.Err, "tidak valid"):
+                    bridge.repo_dir(repo)
+
     def test_start_route_is_exposed(self):
         with patch.object(bridge, "docker_action", return_value={"job_id": "job1"}) as action:
             result = bridge.ROUTES[("POST", "/api/docker/qa/start")]({}, {"repo": "ha00i/Jembatan"})
