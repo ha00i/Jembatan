@@ -229,7 +229,7 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
 .docker-containers{display:flex;flex-wrap:wrap;gap:9px;max-height:220px;overflow:auto;padding:2px 0}
 .docker-containers button{font-size:12px;font-weight:600;text-align:left;min-height:37px;max-width:100%;overflow-wrap:anywhere;transition:background .2s ease,transform .2s ease}
 .docker-containers button:hover{background:var(--accent-soft);transform:translateY(-1px)}
-.docker-out{white-space:pre-wrap;overflow:auto;max-height:340px;font-size:12px;line-height:1.65;background:var(--code);border-radius:10px;padding:16px;margin-top:18px}
+.docker-out{white-space:pre-wrap;overflow:auto;max-height:420px;min-height:92px;font-size:12px;line-height:1.65;background:#13252d;color:#e1f5ea;border:1px solid #37534c;border-radius:10px;padding:16px;margin-top:18px;font-variant-ligatures:none;tab-size:2}
 .docker-caption{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.6}
 .docker-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
 .docker-section-heading h3{margin:0}
@@ -608,7 +608,7 @@ function renderDockerActivity(){
   const busy=!!op,mode=busy?op.kind:result.kind;
   const title=busy?(mode==='qa'?'Menjalankan QA':'Men-deploy aplikasi'):result.title;
   const description=busy?
-    (mode==='qa'?'Perintah tes sedang berjalan pada container QA. Hasil ditampilkan setelah Docker selesai; belum ada persentase yang dapat diverifikasi.':
+    (mode==='qa'?(S.qaLive?.stage||'Menyiapkan container QA')+' · Log tes diperbarui otomatis dari server. Progres waktu nyata tanpa persentase buatan.':
       'Jembatan menunggu Docker Compose menyelesaikan deployment. Jangan jalankan deploy lain sebelum operasi selesai.'):result.description;
   target.className='docker-activity docker-wide '+(busy?'running':result.ok?'success':'error');
   target.innerHTML='<div class="activity-head"><span class="activity-icon" aria-hidden="true">'+
@@ -620,12 +620,20 @@ function renderDockerActivity(){
     '<span>Durasi: <strong id="docker-elapsed" aria-hidden="true">'+esc(busy?durationLabel(op.started):result.elapsed)+'</strong></span></div>';
   const log=$('#docker-output');
   const copy=$('#docker-copy-result');
-  if(log){log.hidden=!result;log.textContent=result?.output||''}
-  if(copy)copy.hidden=!result;
+  const liveText=busy&&mode==='qa'?(S.qaLive?.log||'[Jembatan] Menunggu output pertama dari Docker...'):null;
+  if(log){
+    const previous=log.textContent;
+    const atBottom=log.scrollTop+log.clientHeight>=log.scrollHeight-35;
+    log.hidden=!(result||liveText!==null);
+    const current=liveText!==null?liveText:(result?.output||'');
+    if(previous!==current){log.textContent=current;if(atBottom)log.scrollTop=log.scrollHeight}
+  }
+  if(copy)copy.hidden=!(result||liveText);
 }
 function startDockerOperation(kind,repo){
   if(S.dockerOperation)return false;
   S.dockerOperation={kind,repo,started:Date.now()};S.dockerResult=null;
+  if(kind==='qa')S.qaLive=null;
   renderDockerActivity();clearInterval(dockerTicker);
   dockerTicker=setInterval(()=>{const el=$('#docker-elapsed');if(el&&S.dockerOperation)el.textContent=durationLabel(S.dockerOperation.started)},1000);
   const btns=$('#docker-view')?.querySelectorAll('[data-docker="qa"],[data-docker="deploy"],[data-docker="save-app"],[data-docker="save-connection"]')||[];
@@ -642,13 +650,58 @@ function finishDockerOperation(ok,title,description,output){
   const btns=$('#docker-view')?.querySelectorAll('[data-docker="qa"],[data-docker="deploy"],[data-docker="save-app"],[data-docker="save-connection"]')||[];
   btns.forEach(b=>b.disabled=false);
 }
+let qaPollTimer=null,qaPollBusy=false,qaPollErrors=0;
+function stopQaPoll(){if(qaPollTimer){clearInterval(qaPollTimer);qaPollTimer=null}}
+async function pollQaStatus(repo){
+  if(!repo||qaPollBusy)return;
+  qaPollBusy=true;
+  try{
+    const data=await api('/api/docker/qa/status?repo='+encodeURIComponent(repo));
+    qaPollErrors=0;
+    if(S.repo!==repo)return;
+    const job=data.job;
+    if(!job){stopQaPoll();return}
+    const busy=job.state==='queued'||job.state==='running';
+    if(busy){
+      if(!S.dockerOperation)startDockerOperation('qa',repo);
+      if(S.dockerOperation?.kind==='qa'&&S.dockerOperation?.repo===repo){
+        S.dockerOperation.started=Number(job.started_at)*1000||Date.now();
+        S.qaLive=job;renderDockerActivity();
+      }
+      return;
+    }
+    if(job.state==='passed'||job.state==='failed'){
+      S.qaLive=job;
+      const ok=job.state==='passed';
+      const title=ok?'QA PASS':'QA FAIL';
+      const log=(job.log||'')+(job.truncated?'\n[Jembatan] Hanya 64 KB output terakhir yang disimpan.':'');
+      if(S.dockerOperation?.kind==='qa'&&S.dockerOperation.repo===repo){
+        finishDockerOperation(ok,title,ok?'Tes container QA selesai. Periksa log; commit SHA terbaru belum otomatis dibuktikan.':'Tes pada container QA gagal. Baca baris error untuk memperbaiki tes.',log);
+        notify(ok?'Tes pada container QA lulus.':'Tes pada container QA gagal. Lihat verbose log.',ok?'success':'error',title);
+      }else if(!S.dockerOperation){
+        S.dockerResult={kind:'qa',repo,ok,title,description:'Hasil QA terakhir dari server. Output bukan bukti SHA commit terbaru.',elapsed:durationLabel(Number(job.started_at)*1000),output:log};
+        renderDockerActivity();
+      }
+      stopQaPoll();
+    }
+  }catch(e){
+    qaPollErrors++;
+    if(qaPollErrors===3)notify('Status QA belum dapat dibaca. Jembatan akan mencoba lagi; pekerjaan di server mungkin masih berjalan.','warning','Koneksi log terputus');
+  }finally{qaPollBusy=false}
+}
+function startQaPoll(repo){
+  stopQaPoll();qaPollErrors=0;
+  if(!repo)return;
+  pollQaStatus(repo);
+  qaPollTimer=setInterval(()=>pollQaStatus(repo),1200);
+}
 function setPage(page){
   S.page=page;
   $('#view').hidden=page!=='repos';
   $('#docker-view').hidden=page!=='docker';
   $('#nav-repos').setAttribute('aria-pressed',page==='repos'?'true':'false');
   $('#nav-docker').setAttribute('aria-pressed',page==='docker'?'true':'false');
-  if(page==='docker')refreshDocker();
+  if(page==='docker')refreshDocker();else stopQaPoll();
 }
 $('#nav-repos').onclick=()=>setPage('repos');
 $('#nav-docker').onclick=()=>setPage('docker');
@@ -660,6 +713,7 @@ async function refreshDocker(){
   if(S.page!=='docker'||repo!==S.repo)return;
   if(!cfg){$('#docker-view').textContent='Pengaturan Docker gagal dimuat.';return}
   S.dockerCfg=cfg;drawDocker();
+  if(repo)startQaPoll(repo);
 }
 function drawDocker(){
   const cfg=S.dockerCfg||{},app=cfg.app||{},ssh=cfg.mode==='ssh',repo=S.repo;
@@ -697,7 +751,7 @@ function drawDocker(){
    '<div class="docker-panel docker-wide"><div class="docker-section-heading"><h3>3. Container & hasil</h3><button type="button" id="docker-copy-result" data-docker="copy-result" hidden>Salin hasil</button></div>',
    '<p>Daftar container aktif dan hasil operasi yang kamu jalankan.</p>',
    '<div id="docker-container-list" class="docker-containers"><span class="mute">Klik Lihat container.</span></div>',
-   '<pre id="docker-output" class="docker-out" hidden aria-live="polite"></pre></div>',
+   '<pre id="docker-output" class="docker-out" hidden aria-live="off" aria-label="Verbose log Docker QA"></pre></div>',
    '</div>'
   ].join('');
   $('#docker-view').innerHTML=html;
@@ -713,7 +767,7 @@ $('#docker-view').onclick=async e=>{
   if(!b)return;
   const act=b.dataset.docker,repo=S.repo;
   if(act==='copy-result'){
-    const value=S.dockerResult?.output||'';
+    const value=S.dockerResult?.output||S.qaLive?.log||'';
     if(!value)return;
     try{await navigator.clipboard.writeText(value);notify('Hasil operasi tersalin.','success')}
     catch(_){notify('Clipboard tidak tersedia. Pilih teks hasil dan salin manual.','warning')}
@@ -754,13 +808,12 @@ $('#docker-view').onclick=async e=>{
     if(S.dockerOperation)return notify('Masih ada operasi Docker yang berjalan.','warning');
     if(!confirm('Jalankan tes preset hanya di container QA yang database dan volumenya sudah kamu pisahkan dari production?'))return;
     startDockerOperation('qa',repo);
-    const r=await run('Menjalankan QA',()=>api('/api/docker/qa','POST',{repo}));
-    const log=r?((r.ok?'QA COMMAND PASS':'QA COMMAND FAIL')+' · '+r.container+' · '+r.profile+
-      '\n\n'+r.output+'\n\nCatatan: tes container existing tidak otomatis membuktikan commit branch terakhir diuji.'):'Permintaan QA gagal. Lihat notifikasi error di atas.';
-    finishDockerOperation(!!r?.ok,r?.ok?'Tes QA selesai':'QA belum lulus',
-      r?.ok?'Perintah pada container QA selesai dengan exit code 0. Ini bukan bukti commit terbaru sudah diuji.':
-        'Periksa log dan konfigurasi container QA. Aplikasi production tidak disentuh oleh tombol QA.',log);
-    if(r)notify(r.ok?'Perintah QA lulus pada '+r.container+'.':'Tes QA gagal pada '+r.container+'. Periksa hasil. ',r.ok?'success':'error',r.ok?'QA selesai':'QA gagal');
+    const r=await run('Menyiapkan QA verbose',()=>api('/api/docker/qa/start','POST',{repo}));
+    if(!r){
+      finishDockerOperation(false,'QA gagal dimulai','Permintaan ditolak. Periksa koneksi Docker dan pengaturan container QA.','[Jembatan] QA tidak berhasil dimulai; tidak ada tes yang dijalankan oleh permintaan ini.');
+      return;
+    }
+    if(S.repo===repo)startQaPoll(repo);
     return;
   }
   if(act==='deploy'){
