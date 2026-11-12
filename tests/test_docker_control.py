@@ -115,6 +115,42 @@ class DockerControlTests(unittest.TestCase):
             result = ctl.run_qa(self.app, "ha00i/Jembatan")
         self.assertFalse(result["ok"])
 
+    def test_qa_checkout_git_sha_is_attested_before_and_after_tests(self):
+        self.set_qa()
+        sha = "a" * 40
+        output = "Tests: 4 passed"
+        with patch.object(ctl, "_docker", side_effect=[
+            "true|false|bridge", sha, "", output, sha, ""
+        ]) as mock:
+            result = ctl.run_qa(self.app, "ha00i/Jembatan", on_event=lambda *x: None)
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["source_verified"])
+        self.assertEqual(result["source_sha"], sha)
+        self.assertEqual(mock.call_count, 6)
+
+    def test_qa_without_git_metadata_may_pass_but_is_not_deploy_ready(self):
+        self.set_qa()
+        events = []
+        with patch.object(ctl, "_docker", side_effect=[
+            "true|false|bridge", ctl.DockerError("git unavailable", 502), "Tests PASS"
+        ]):
+            result = ctl.run_qa(self.app, "ha00i/Jembatan",
+                                on_event=lambda kind, msg: events.append((kind, msg)))
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["source_verified"])
+        self.assertIsNone(result["source_sha"])
+        self.assertTrue(any("Git checkout" in msg for _, msg in events))
+
+    def test_qa_sha_changes_during_test_is_not_verified(self):
+        self.set_qa()
+        sha = "a" * 40
+        with patch.object(ctl, "_docker", side_effect=[
+            "true|false|bridge", sha, "", "PASS", "b" * 40, ""
+        ]):
+            result = ctl.run_qa(self.app, "ha00i/Jembatan", on_event=lambda *x: None)
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["source_verified"])
+
     def test_deploy_requires_exact_confirmation(self):
         with self.assertRaisesRegex(ctl.DockerError, "Konfirmasi"):
             ctl.deploy(self.app, "ha00i/Jembatan", "yes")
