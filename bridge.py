@@ -2,6 +2,7 @@
 """Jembatan: ChatGPT <-> GitHub. Hanya library standar Python. Lihat README.md."""
 import base64, hmac, json, os, re, shlex, subprocess, sys, tempfile, threading, time
 import branch_manager
+import docker_control
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib import error as urlerr, request as urlreq
@@ -244,14 +245,21 @@ def apply_patch(r, n, reply, branch=None):
     if git(d, "status", "--porcelain"):
         raise Err("Folder repo ini kotor. Jangan edit manual folder kerja bot.", 409)
     patch = extract_patch(reply)
-    created = not branch
-    if created:
-        branch = f"bridge/issue-{int(n)}-{time.strftime('%m%d-%H%M%S')}-{os.urandom(2).hex()}"
-        git(d, "checkout", "-q", "--no-track", "-b", branch, f"origin/{base}")
-    else:
-        if not need_branch(branch).startswith("bridge/"):
-            raise Err("Hanya branch bridge/* yang boleh diubah bot.")
+    # One issue → one stable branch; repeat fixes never generate extra branches.
+    stable = f"bridge/issue-{int(n)}"
+    if branch and branch != stable:
+        raise Err(f"Issue ini harus memakai branch tunggal {stable}", 409)
+    branch = stable
+    local_exists = bool(git(d, "branch", "--list", branch).strip())
+    remote_exists = bool(git(d, "rev-parse", "--verify", "-q",
+                             f"refs/remotes/origin/{branch}", check=False))
+    created = not local_exists and not remote_exists
+    if local_exists:
         git(d, "checkout", "-q", branch)
+    elif remote_exists:
+        git(d, "checkout", "-q", "-b", branch, f"origin/{branch}")
+    else:
+        git(d, "checkout", "-q", "--no-track", "-b", branch, f"origin/{base}")
     with tempfile.NamedTemporaryFile("w", suffix=".patch", delete=False) as f:
         f.write(patch)
     try:
@@ -269,18 +277,10 @@ def apply_patch(r, n, reply, branch=None):
         raise Err("Patch tidak mengubah apa pun.")
     git(d, "-c", "user.name=Jembatan", "-c", "user.email=jembatan@localhost",
         "commit", "-q", "-m", f"Kerjakan #{int(n)} (patch dari ChatGPT)")
-    res = {"branch": branch, "commit": git(d, "rev-parse", "--short", "HEAD"), "test": None}
-    if TEST_CMD:
-        try:
-            p = subprocess.run(shlex.split(TEST_CMD), cwd=d, capture_output=True, text=True, timeout=900)
-            res["test"] = {"ok": p.returncode == 0, "output": (p.stdout + p.stderr)[-4000:]}
-        except (OSError, subprocess.TimeoutExpired) as e:
-            res["test"] = {"ok": False, "output": str(e)}
-        if not res["test"]["ok"]:
-            res["followup"] = (f"Patch tadi sudah diterapkan di branch {branch}, tetapi test gagal.\n"
-                               f"Output test:\n```\n{res['test']['output']}\n```\n"
-                               "Balas dengan format yang sama (STATUS/KEKURANGAN/PATCH). Patch harus "
-                               "relatif terhadap kondisi branch SEKARANG, yaitu setelah patch pertama.")
+    # Legacy TEST_CMD on Jembatan has access to production Docker socket.
+    # Never execute arbitrary test commands during patch apply.
+    res = {"branch": branch, "commit": git(d, "rev-parse", "--short", "HEAD"),
+           "test": None, "qa_required": True}
     return res
 
 
@@ -290,26 +290,27 @@ def push(r, branch, n):
         raise Err("Bot hanya boleh push ke branch bridge/*.")
     git(d, "push", "-u", "origin", branch, net=True, timeout=300)
     try:
+        existing = gh_pages(f"/repos/{r}/pulls?state=open&head={r.split('/')[0]}:{branch}", 1)
+        for item in existing:
+            if item.get("head", {}).get("ref") == branch:
+                return {"pushed": True, "pr": item["html_url"], "reused": True}
         pr = gh(f"/repos/{r}/pulls", "POST", {
             "title": f"Kerjakan #{int(n)}", "head": branch, "base": default_branch(d),
             "body": f"Closes #{int(n)}\n\nDibuat lewat Jembatan (patch dari ChatGPT)."})
-        return {"pushed": True, "pr": pr["html_url"]}
+        return {"pushed": True, "pr": pr["html_url"], "reused": False}
     except Err as e:
         return {"pushed": True, "pr": None, "error": str(e)}
 
 
-# ---------- deploy dengan Docker ----------
-def deploy(r):
-    d = Path(DEPLOY_MAP.get(r) or repo_dir(r))
-    if not (d / ".git").exists():
-        raise Err("Folder deploy belum ada atau bukan repo git.", 404)
-    if r in DEPLOY_MAP:
-        git(d, "pull", "--ff-only", net=True, timeout=300)
-    else:
-        git(d, "fetch", "--prune", net=True, timeout=300)
-        git(d, "checkout", "-q", "--detach", f"origin/{default_branch(d)}")
-    out = run(["docker", "compose", "up", "-d", "--build"], "docker compose", cwd=d, timeout=1800)
-    return {"output": out[-4000:]}
+# ---------- Docker: explicit mapping, fixed QA commands, operator-approved deploy ----------
+def docker_action(func, *args):
+    try:
+        return func(sys.modules[__name__], *args)
+    except docker_control.DockerError as e:
+        raise Err(str(e), e.code) from e
+
+def deploy(r, confirm):
+    return docker_action(docker_control.deploy, r, confirm)
 
 
 # ---------- HTTP ----------
@@ -325,7 +326,19 @@ ROUTES = {
     ("POST", "/api/apply"): lambda q, b: apply_patch(b["repo"], int(b["issue"]), b["reply"],
                                                      b.get("branch") or None),
     ("POST", "/api/push"): lambda q, b: push(b["repo"], b["branch"], int(b["issue"])),
-    ("POST", "/api/deploy"): lambda q, b: deploy(b["repo"]),
+    ("GET", "/api/docker/settings"): lambda q, b: docker_action(
+        docker_control.public_settings, q.get("repo")),
+    ("POST", "/api/docker/settings"): lambda q, b: docker_action(
+        docker_control.save_connection, b),
+    ("POST", "/api/docker/app"): lambda q, b: docker_action(
+        docker_control.save_app, b),
+    ("GET", "/api/docker/connection"): lambda q, b: docker_action(
+        docker_control.connection_test),
+    ("GET", "/api/docker/containers"): lambda q, b: docker_action(
+        docker_control.containers),
+    ("POST", "/api/docker/qa"): lambda q, b: docker_action(
+        docker_control.run_qa, b["repo"]),
+    ("POST", "/api/deploy"): lambda q, b: deploy(b["repo"], b["confirm"]),
 }
 
 
