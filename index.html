@@ -231,6 +231,12 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
 .docker-containers button:hover{background:var(--accent-soft);transform:translateY(-1px)}
 .docker-out{white-space:pre-wrap;overflow:auto;max-height:420px;min-height:92px;font-size:12px;line-height:1.65;background:#13252d;color:#e1f5ea;border:1px solid #37534c;border-radius:10px;padding:16px;margin-top:18px;font-variant-ligatures:none;tab-size:2}
 .docker-caption{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.6}
+.deploy-readiness{border:1px solid var(--line);background:#f8faf9;border-radius:10px;padding:12px 13px;margin-top:15px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;line-height:1.5}
+.deploy-readiness strong{display:block;margin-bottom:3px}
+.deploy-readiness p{margin:0;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.deploy-readiness button{flex:0 0 auto;font-size:12px}
+.deploy-readiness.ready{border-color:#c7e0d2;background:#f2faf5}
+.deploy-readiness.blocked{border-color:#e5c7a6;background:#fff9f2}
 .docker-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
 .docker-section-heading h3{margin:0}
 .docker-section-heading button{font-size:12px}
@@ -692,6 +698,7 @@ async function pollQaStatus(repo){
         renderDockerActivity();
       }
       stopQaPoll();
+      refreshDeployReadiness(repo);
     }
   }catch(e){
     qaPollErrors++;
@@ -722,7 +729,28 @@ async function refreshDocker(){
   if(S.page!=='docker'||repo!==S.repo)return;
   if(!cfg){$('#docker-view').textContent='Pengaturan Docker gagal dimuat.';return}
   S.dockerCfg=cfg;drawDocker();
-  if(repo)startQaPoll(repo);
+  if(repo){startQaPoll(repo);refreshDeployReadiness(repo)}
+}
+async function refreshDeployReadiness(repo){
+  if(!repo||S.repo!==repo)return;
+  const label=$('#deploy-ready-label');
+  const info=$('#deploy-ready-detail');
+  const box=$('#deploy-ready-box');
+  if(label)label.textContent='Memeriksa branch dan bukti QA...';
+  try{
+    const data=await api('/api/deploy/readiness?repo='+encodeURIComponent(repo));
+    if(S.repo!==repo)return;
+    S.deployReadiness=data;
+    if(box)box.className='deploy-readiness '+(data.qa_ready?'ready':'blocked');
+    if(label)label.textContent=data.qa_ready?'QA terverifikasi untuk deploy':'Deploy belum siap';
+    if(info)info.textContent='Branch '+data.branch+' · '+data.sha.slice(0,12)+' — '+data.reason;
+  }catch(e){
+    if(S.repo!==repo)return;
+    S.deployReadiness=null;
+    if(box)box.className='deploy-readiness blocked';
+    if(label)label.textContent='Kesiapan deploy belum dapat diverifikasi';
+    if(info)info.textContent=e.message;
+  }
 }
 function drawDocker(){
   const cfg=S.dockerCfg||{},app=cfg.app||{},ssh=cfg.mode==='ssh',repo=S.repo;
@@ -749,12 +777,16 @@ function drawDocker(){
    '<input id="docker-qa-container" placeholder="vortex-qa-qa-app-1" value="'+esc(app.qa_container||'')+'"'+disabled+'>',
    '<label for="docker-qa-profile">Jenis tes</label><select id="docker-qa-profile"'+disabled+'>',
    '<option value="">Pilih profil QA</option>'+profiles+'</select>',
+   '<label for="docker-deploy-branch">Branch untuk deploy</label><select id="docker-deploy-branch"'+disabled+'>', 
+   '<option value="main"'+((app.deploy_branch||'main')==='main'?' selected':'')+'>main (production)</option>',
+   '<option value="staging"'+(app.deploy_branch==='staging'?' selected':'')+'>staging</option></select>',
    '<label for="docker-deploy-path">Path Compose aplikasi</label>',
    '<input id="docker-deploy-path" placeholder="/srv/apps/project" value="'+esc(app.deploy_path||'')+'"'+disabled+'>',
    '<div class="row"><button data-docker="save-app"'+disabled+'>Simpan aplikasi</button>',
    '<button class="go" data-docker="qa"'+disabled+'>Run QA</button>',
    '<button class="danger-outline" data-docker="deploy"'+disabled+'>Deploy</button></div>',
-   '<p class="docker-caption">QA hanya pada container bernama QA; pastikan database/volume QA benar-benar terpisah. Deploy meminta konfirmasi nama repo.</p>',
+   '<p class="docker-caption">QA harus PASS pada commit branch target yang sama. Container QA harus menyediakan Git checkout yang dapat diverifikasi. Deploy meminta konfirmasi nama repo.</p>',
+   '<div class="deploy-readiness" id="deploy-ready-box" role="status"><div><strong id="deploy-ready-label">Belum diperiksa</strong><p id="deploy-ready-detail">Periksa SHA GitHub dan bukti QA sebelum deploy.</p></div><button data-docker="check-ready" type="button">Periksa kesiapan</button></div>',
    '</div>',
    '<section class="docker-activity docker-wide" id="docker-activity" aria-label="Status pekerjaan Docker" role="status" hidden></section>',
    '<div class="docker-panel docker-wide"><div class="docker-section-heading"><h3>3. Container & hasil</h3><button type="button" id="docker-copy-result" data-docker="copy-result" hidden>Salin hasil</button></div>',
@@ -783,6 +815,7 @@ $('#docker-view').onclick=async e=>{
     return;
   }
   if(act==='reload')return refreshDocker();
+  if(act==='check-ready')return refreshDeployReadiness(repo);
   if(act==='save-connection'){
     const data={mode:$('#docker-mode').value,host:$('#docker-host').value.trim(),
       username:$('#docker-user').value.trim(),port:Number($('#docker-port').value||22)};
@@ -808,9 +841,10 @@ $('#docker-view').onclick=async e=>{
   if(!repo)return note('Pilih repository dulu.',1);
   if(act==='save-app'){
     const body={repo,qa_container:$('#docker-qa-container').value.trim(),
-      qa_profile:$('#docker-qa-profile').value,deploy_path:$('#docker-deploy-path').value.trim()};
+      qa_profile:$('#docker-qa-profile').value,deploy_branch:$('#docker-deploy-branch').value,
+      deploy_path:$('#docker-deploy-path').value.trim()};
     const r=await run('Menyimpan aplikasi',()=>api('/api/docker/app','POST',body));
-    if(r){S.dockerCfg.app=r;note('Pengaturan aplikasi disimpan.')}
+    if(r){S.dockerCfg.app=r;note('Pengaturan aplikasi disimpan.');refreshDeployReadiness(repo)}
     return;
   }
   if(act==='qa'){
@@ -827,15 +861,25 @@ $('#docker-view').onclick=async e=>{
   }
   if(act==='deploy'){
     if(S.dockerOperation)return notify('Masih ada operasi Docker yang berjalan.','warning');
-    const typed=prompt('Konfirmasi deploy production. Ketik nama repository persis:\n'+repo);
+    const ready=await run('Memeriksa SHA dan bukti QA',()=>api('/api/deploy/readiness?repo='+encodeURIComponent(repo)));
+    if(!ready)return;
+    S.deployReadiness=ready;
+    if(!ready.qa_ready){notify(ready.reason,'warning','Deploy diblokir');refreshDeployReadiness(repo);return}
+    const typed=prompt('Deploy '+ready.branch+' pada SHA '+ready.sha.slice(0,12)+
+      '. Ketik nama repository persis untuk melanjutkan:\n'+repo);
     if(typed!==repo)return note('Deploy dibatalkan: konfirmasi tidak cocok.',1);
     startDockerOperation('deploy',repo);
-    const r=await run('Deploy aplikasi',()=>api('/api/deploy','POST',{repo,confirm:typed}));
-    finishDockerOperation(!!r,'Hasil deployment',
-      r?'Perintah deployment selesai. Tinjau hasil dan healthcheck aplikasi sebelum menganggap rilis sehat.':
-        'Deployment gagal atau tidak selesai. Periksa notifikasi dan status container production.',
-      r?'Deploy: '+r.path+'\n\n'+r.output+'\n\n'+r.status:'Permintaan deployment gagal. Periksa notifikasi error.');
-    if(r)notify('Perintah deployment selesai untuk '+repo+'. Periksa healthcheck.','success','Deploy selesai');
+    const r=await run('Pull, build, dan verifikasi deploy',()=>api('/api/deploy','POST',{repo,confirm:typed}));
+    const ok=!!r?.ok;
+    const verified=!!r?.health_verified;
+    const name=verified?'Deploy healthy':ok?'Deploy selesai, healthcheck belum lengkap':'Deploy perlu diperiksa';
+    finishDockerOperation(ok,name,
+      verified?'Semua service Compose yang dilaporkan sudah healthy.':
+      r?.warning||'Verifikasi deployment belum berhasil; tinjau container dan log.',
+      r?('Branch: '+r.branch+'\nSHA: '+r.commit_sha+'\nHealth: '+r.health+
+       '\n\n'+r.output+'\n\n'+r.status+'\n\n'+(r.warning||'')):'Deploy gagal sebelum perintah selesai.');
+    if(r)notify(name,verified?'success':ok?'warning':'error','Deployment');
+    refreshDeployReadiness(repo);
   }
 };
 
