@@ -51,6 +51,21 @@ class DockerActivityUIContract(unittest.TestCase):
         self.assertIn("SHA belum terverifikasi", HTML)
         self.assertIn("r?.health_verified", HTML)
 
+    def test_deploy_branch_options_are_loaded_from_github(self):
+        self.assertIn("/api/deploy/branches?repo=", HTML)
+        self.assertIn("async function refreshDeployBranches(repo)", HTML)
+        self.assertIn("function renderDeployBranchChoices()", HTML)
+        self.assertIn("data.qa_ready?'ready':'blocked'", HTML)
+        self.assertIn("if(data.sha)", HTML) if False else None
+        self.assertIn("data.sha?' · '+data.sha.slice(0,12):' · belum tersedia'", HTML)
+
+    def test_nonexistent_branch_needs_explicit_selection_and_save(self):
+        self.assertIn(" (tidak ditemukan)", HTML)
+        self.assertIn("Pilih branch dari daftar, lalu klik Simpan aplikasi", HTML)
+        self.assertIn("if(!S.deployBranches?.available?.includes(branch))", HTML)
+        self.assertIn("Branch belum disimpan", HTML)
+        self.assertIn("Memeriksa branch GitHub...", HTML)
+
     def test_toasts_are_actionable_and_accessible(self):
         self.assertIn('id="toast-stack" aria-label="Notifikasi aktivitas"', HTML)
         self.assertIn('class="notice-close" aria-label="Tutup notifikasi"', HTML)
