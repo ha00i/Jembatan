@@ -153,6 +153,37 @@ def _read_samples(path):
     return items
 
 
+def progress(samples, max_gap=180):
+    """Local progress only; never claims QA eligibility."""
+    if not samples:
+        return {"sample_count": 0, "duration_hours": 0, "remaining_hours": 24,
+                "has_sampling_gap": False, "qa_enabled": False}
+    duration = max(0, samples[-1]["epoch"] - samples[0]["epoch"])
+    gaps = [b["epoch"] - a["epoch"] for a, b in zip(samples, samples[1:])]
+    return {
+        "sample_count": len(samples),
+        "duration_hours": round(duration / 3600, 3),
+        "remaining_hours": round(max(0, MIN_SURVEY_SECONDS - duration) / 3600, 3),
+        "has_sampling_gap": any(g <= 0 or g > max_gap for g in gaps),
+        "latest_mem_available_gib": round(samples[-1].get("mem_available_bytes", 0) / GIB, 2),
+        "latest_cpu_percent": samples[-1].get("cpu_busy_percent"),
+        "qa_enabled": False,
+    }
+
+
+def resume_state(path, max_gap=180):
+    """Allow resumption only when gap is short enough to preserve 24h evidence."""
+    samples = _read_samples(path)
+    if not samples:
+        raise ValueError("File survei kosong; mulai file baru")
+    last = samples[-1]
+    delta = time.time() - last["epoch"]
+    if delta < 0 or delta > max_gap:
+        raise ValueError("Jeda pengumpulan lebih dari 3 menit atau waktu berubah; "
+                         "jangan gabungkan baseline. Mulai survei dengan --output baru.")
+    return samples[0]["epoch"], last.get("cpu_ticks"), last.get("oom_kill_count"), len(samples)
+
+
 def analyze(samples, critical, min_seconds=MIN_SURVEY_SECONDS, max_gap=180):
     """Conservative advisory result. NO_GO is never permission to run QA."""
     reasons = []
@@ -232,10 +263,15 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Jembatan S0 read-only production audit; tidak menjalankan QA")
     sub = parser.add_subparsers(dest="action", required=True)
     sub.add_parser("snapshot", help="ambil satu sampel JSON pada stdout")
-    collect = sub.add_parser("collect", help="survei 24 jam; proses terminal harus tetap hidup")
+    sub.add_parser("containers", help="daftar nama container lokal dari Docker secara read-only")
+    status = sub.add_parser("status", help="lihat jumlah sampel dan progres survei, tanpa menunggu 24 jam")
+    status.add_argument("--input", default=".s0-audit/samples.jsonl")
+    collect = sub.add_parser("collect", help="survei 24 jam; gunakan tmux/nohup agar terminal bebas")
     collect.add_argument("--output", default=".s0-audit/samples.jsonl")
     collect.add_argument("--hours", type=float, default=24)
     collect.add_argument("--interval", type=int, default=60)
+    collect.add_argument("--resume", action="store_true",
+                         help="lanjutkan file survei bila jeda sejak sampel terakhir <=3 menit")
     report = sub.add_parser("report", help="analisis sampel yang sudah tersimpan")
     report.add_argument("--input", default=".s0-audit/samples.jsonl")
     report.add_argument("--output", default=".s0-audit/report.json")
@@ -244,26 +280,54 @@ def main(argv=None):
     if args.action == "snapshot":
         print(json.dumps(snapshot(), indent=2, ensure_ascii=False))
         return 0
+    if args.action == "containers":
+        result = docker_snapshot()
+        if not result["readable"]:
+            print("Docker lokal tidak dapat dibaca dari akun ini. "
+                  "Periksa 'docker ps' tanpa mengubah izin/socket production.", file=sys.stderr)
+            return 2
+        if not result["containers"]:
+            print("Tidak ada container ditemukan.")
+        for c in result["containers"]:
+            print(f"{c['name']} | {c['state']} | {c['health']}")
+        return 0
     if args.action == "collect":
         if args.hours <= 0 or args.hours > 72 or args.interval < 10 or args.interval > 3600:
-            parser.error("hours harus 0–72, interval 10–3600 detik")
+            parser.error("hours harus >0 dan <=72, interval 10–3600 detik")
         path = Path(args.output).expanduser()
-        if path.exists():
-            parser.error("Output sudah ada; gunakan path baru agar bukti audit tidak tercampur")
-        end = time.monotonic() + args.hours * 3600
-        previous_ticks = None
-        previous_oom = None
+        if args.resume:
+            if not path.is_file():
+                parser.error("--resume memerlukan file survei yang sudah ada")
+            try:
+                started, previous_ticks, previous_oom, prior_count = resume_state(path)
+            except ValueError as exc:
+                parser.error(str(exc))
+        else:
+            if path.exists():
+                parser.error("Output sudah ada. Gunakan --resume (jeda <=3 menit) atau --output baru.")
+            started, previous_ticks, previous_oom, prior_count = time.time(), None, None, 0
+        end = time.monotonic() + max(0, started + args.hours * 3600 - time.time())
+        count = prior_count
         print(f"S0 read-only survey: {args.hours:g} jam, tiap {args.interval} detik. File: {path}", flush=True)
-        while True:
-            t0 = time.monotonic()
-            sample = snapshot(previous_ticks, previous_oom)
-            previous_ticks, previous_oom = sample["cpu_ticks"], sample["oom_kill_count"]
-            _secure_append(path, sample)
-            print(f"{sample['sampled_at']} | RAM available {sample['mem_available_bytes'] / GIB:.2f} GiB | CPU {sample['cpu_busy_percent']}%", flush=True)
-            if t0 >= end:
-                break
-            time.sleep(min(args.interval, max(0, end - time.monotonic())))
-        print("Survei selesai. Buat laporan dengan perintah report.")
+        print("Sampel pertama: CPU belum dapat dihitung, normal. "
+              "Tekan Ctrl+C untuk menyimpan lalu berhenti tanpa menghapus sampel.", flush=True)
+        try:
+            while True:
+                t0 = time.monotonic()
+                sample = snapshot(previous_ticks, previous_oom)
+                previous_ticks, previous_oom = sample["cpu_ticks"], sample["oom_kill_count"]
+                _secure_append(path, sample)
+                count += 1
+                cpu_label = "menghitung (perlu sampel kedua)" if sample["cpu_busy_percent"] is None else f"{sample['cpu_busy_percent']}%"
+                print(f"{sample['sampled_at']} | RAM available {sample['mem_available_bytes'] / GIB:.2f} GiB | CPU {cpu_label} | sampel {count}", flush=True)
+                if t0 >= end:
+                    break
+                time.sleep(min(args.interval, max(0, end - time.monotonic())))
+        except KeyboardInterrupt:
+            print(f"Survei dihentikan manual; {count} sampel tersimpan di {path}. "
+                  "Jika jeda >3 menit, buat survei baru dengan --output berbeda.", flush=True)
+            return 130
+        print("Survei selesai. Buat laporan dengan perintah report.", flush=True)
         return 0
     source = Path(args.input).expanduser()
     if not source.is_file():
@@ -272,6 +336,13 @@ def main(argv=None):
         samples = _read_samples(source)
     except ValueError as err:
         parser.error(str(err))
+    if args.action == "status":
+        print(json.dumps(progress(samples), ensure_ascii=False, indent=2))
+        return 0
+    placeholders = {"nama-container-production", "nama_container_production", "container-name", "CONTAINER"}
+    if any(name.strip() in placeholders for name in args.critical):
+        parser.error("--critical masih berisi teks contoh. Jalankan subcommand 'containers' "
+                     "untuk melihat nama sebenarnya, lalu ulangi --critical sesuai output.")
     output = analyze(samples, args.critical, max_gap=3 * 60)
     target = Path(args.output).expanduser()
     _atomic_write(target, json.dumps(output, ensure_ascii=False, indent=2) + "\n")
