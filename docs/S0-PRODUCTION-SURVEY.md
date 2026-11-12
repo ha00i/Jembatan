@@ -25,6 +25,7 @@ python3 scripts/s0_prod_audit.py snapshot
 Gunakan `tmux` bila tersedia. Jika tidak, kamu bisa menjalankan collector dengan `nohup` seperti ini:
 
 ```bash
+umask 077
 mkdir -p .s0-audit
 chmod 700 .s0-audit
 nohup python3 -u scripts/s0_prod_audit.py collect \
