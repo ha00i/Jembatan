@@ -660,7 +660,16 @@ async function pollQaStatus(repo){
     qaPollErrors=0;
     if(S.repo!==repo)return;
     const job=data.job;
-    if(!job){stopQaPoll();return}
+    if(!job){
+      stopQaPoll();
+      if(S.dockerOperation?.kind==='qa'&&S.dockerOperation.repo===repo){
+        finishDockerOperation(false,'Status QA hilang',
+          'Job tidak ditemukan di backend; kemungkinan Jembatan restart. Periksa container QA sebelum menjalankan tes ulang.',
+          '[Jembatan] Tidak ada data job pada backend. Tidak dapat menyimpulkan PASS atau FAIL.');
+        notify('Job QA tidak ditemukan. Periksa container dan log server sebelum mengulang.','warning','Status QA hilang');
+      }
+      return;
+    }
     const busy=job.state==='queued'||job.state==='running';
     if(busy){
       if(!S.dockerOperation)startDockerOperation('qa',repo);
@@ -692,8 +701,8 @@ async function pollQaStatus(repo){
 function startQaPoll(repo){
   stopQaPoll();qaPollErrors=0;
   if(!repo)return;
-  pollQaStatus(repo);
   qaPollTimer=setInterval(()=>pollQaStatus(repo),1200);
+  pollQaStatus(repo);
 }
 function setPage(page){
   S.page=page;
