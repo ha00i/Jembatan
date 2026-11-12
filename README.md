@@ -61,6 +61,23 @@ Uji modul tanpa layanan eksternal: `python -m unittest discover -s tests -v`.
 Pengujian integrasi pada GitHub dan pengecekan proteksi branch tetap harus dilakukan
 pada repo uji sebelum penghapusan branch produksi.
 
+## Safe Runner — desain server production lokal (belum aktif)
+
+Untuk server production lokal **8 GB RAM / 4 CPU / tanpa VM**, tersedia rancangan
+**Safe Runner**: ChatGPT tetap manual copy/paste, workflow patch → guard
+SAFE/WAIT/STOP → QA rootless terpisah → bukti QA per commit SHA → PR → merge/deploy
+dengan persetujuan. Default **1 job**, maksimum **1 CPU ekuivalen + 1,5 GiB RAM
+agregat QA**, dan hanya profil testing ringan setelah survei resource.
+
+- [Arsitektur dan alur lengkap](docs/SAFE-RUNNER-ARCHITECTURE.md)
+- [Tahap kerja, SOP, API usulan, dan 18 kriteria penerimaan](docs/SAFE-RUNNER-EXECUTION-PLAN.md)
+
+**Peringatan:** ini masih dokumen rancangan, bukan fitur running.
+`TEST_CMD` sekarang masih menggunakan proses Jembatan yang memiliki mount
+`docker.sock` production. Jangan menjalankan patch yang tidak tepercaya dengan
+mekanisme tersebut; jalur QA harus dipisah dan diuji terlebih dahulu.
+Tidak ada perubahan ke Docker production melalui dokumen ini.
+
 ## Keamanan
 - Bot hanya push ke branch `bridge/*`, tidak pernah ke branch utama.
 - UI tidak menerima perintah bebas. Test dan deploy memakai perintah tetap dari `.env`.
