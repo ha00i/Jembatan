@@ -74,7 +74,7 @@ def _runner(app, job):
         result = docker_control.run_qa(app, job["repo"], on_event=on_event)
         with _LOCK:
             job["ok"] = result["ok"]
-            job["exit_code"] = 0 if result["ok"] else 1
+            job["exit_code"] = 0 if result["ok"] else None
             job["state"] = "passed" if result["ok"] else "failed"
             job["stage"] = "Tes selesai" if result["ok"] else "Tes gagal"
         report("\n[Jembatan] " + ("PASS" if result["ok"] else "FAIL") + " — periksa hasil tes di atas.\n")
