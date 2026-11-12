@@ -75,6 +75,23 @@ python3 scripts/s0_prod_audit.py report --input .s0-audit/samples.jsonl --critic
 Bukti disimpan privat pada `.s0-audit/` (diabaikan Git). Monitoring hanya mengakses `/proc` dan perintah Docker read-only; **tidak menjalankan QA, mengubah container, mengubah daemon, atau melakukan deploy**.
 Laporan **tidak pernah otomatis mengaktifkan QA**. Lihat [panduan S0 lengkap](docs/S0-PRODUCTION-SURVEY.md).
 
+### Saat survei S0 terhenti atau ingin melihat progres
+
+`Ctrl+C` saat pengumpulan 24 jam sebelumnya menghasilkan `KeyboardInterrupt` dan file
+sampel tidak lengkap. Script S0 sekarang menangani penghentian tanpa traceback,
+menyimpan sampel, menampilkan nama container yang terbaca, dan memungkinkan melihat progres.
+
+```bash
+python3 scripts/s0_prod_audit.py containers
+python3 scripts/s0_prod_audit.py status --input .s0-audit/samples.jsonl
+```
+
+Jika jeda lebih dari 3 menit, mulai **file baru** agar baseline tetap kontinu.
+Untuk pengumpulan tanpa menahan terminal utama, ikuti panduan
+[Survei production S0](docs/S0-PRODUCTION-SURVEY.md) (contoh `nohup` dan
+pemantauan `status`). `qa_enabled` tetap `false` sampai QA terisolasi
+benar-benar dibangun dan diverifikasi.
+
 ## Safe Runner — desain server production lokal (belum aktif)
 
 Untuk server production lokal **8 GB RAM / 4 CPU / tanpa VM**, tersedia rancangan
