@@ -8,7 +8,7 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       WORKDIR: /srv/jembatan/repos
-      TEST_CMD: ${TEST_CMD:-}
+      # Legacy TEST_CMD sengaja tidak diteruskan: QA memakai profil aman di Docker & QA.
       DEPLOY_MAP: ${DEPLOY_MAP:-}
     volumes:
       # Path di host dan di kontainer HARUS sama, supaya docker compose milik repo
