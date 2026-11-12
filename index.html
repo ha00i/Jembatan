@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Jembatan</title>
+<title>Jembatan — Development Control</title>
+<meta name="theme-color" content="#0d1738">
+<meta name="description" content="Jembatan menyatukan GitHub, QA Docker, dan deployment dalam satu workspace.">
+<link rel="icon" type="image/svg+xml" href="/assets/jembatan-mark.svg">
 <style>
 
 :root{
@@ -287,25 +290,97 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
 @media(max-width:540px){.docker-panel .row button{flex:1 1 100%}.activity-head{flex-wrap:wrap;gap:9px}.activity-badge{margin-left:50px}.activity-meta{flex-direction:column;gap:4px}.toast-stack{top:max(12px,env(safe-area-inset-top));left:12px;right:12px;width:auto}.app-notice{padding:12px}}
 @media(prefers-reduced-motion:reduce){.activity-spinner,#note.working::before{animation:none;border-color:var(--accent);border-style:dotted}.progress-track span{animation:none;width:100%;opacity:.55}.app-notice,.app-notice.exit,.patch-toast:not([hidden]){animation:none}.docker-containers button:hover{transform:none}.simple-nav button,.docker-containers button{transition:none}}
 @media(forced-colors:active){.progress-track{border:1px solid CanvasText}.progress-track span{background:Highlight}.app-notice,.docker-activity{border:2px solid CanvasText}}
+/* Jembatan brand system — bridges, connection nodes, and precise spacing. */
+:root{
+  --page:#F3F6FC;--surface:#FFFFFF;--rail:#0D1738;--rail-border:#283767;
+  --ink:#152044;--muted:#65738A;--line:#DFE7F2;--accent:#2467EB;
+  --accent-soft:#EBF2FF;--warning:#9B6417;--warning-soft:#FFF3DF;
+  --done:#078C72;--done-soft:#E5F7EF;--pending:#667893;--pending-soft:#EFF2F8;
+  --review:#6A53A7;--review-soft:#F2EDFC;--focus:#1A69EA;--code:#F4F7FC;
+}
+body{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;letter-spacing:-.005em}
+.app{grid-template-columns:284px minmax(0,1fr)}
+aside{background:linear-gradient(170deg,#0D1738 0%,#10244B 67%,#0C1A39 100%);border-right:1px solid #273761;padding:28px 19px 21px;gap:19px}
+.brand{gap:11px;padding-bottom:3px}
+.bridge-symbol{width:56px;height:56px;flex:0 0 56px;border:1px solid #3E5584;border-radius:16px;background:#14234C;box-shadow:0 8px 24px #0003;overflow:hidden}
+.bridge-symbol img{display:block;width:100%;height:100%;object-fit:contain}
+.brand-text small{color:#90DDED;font-size:9px;letter-spacing:.2em;font-weight:800}
+.brand-text h1{color:white;font-size:26px;letter-spacing:-.055em;margin:3px 0 0}
+.sub{color:#B1C5E1;font-size:12px;line-height:1.65;padding:0 2px}
+.rail-label{color:#AFC3E3;font-size:10px;letter-spacing:.14em}
+aside .auth-row input,aside #q{border-color:#3D5380;background:#132852;color:#F6FAFF;border-radius:10px}
+aside button:not(.go){border-color:#3B5180;background:#192B55;color:#E9F3FF;border-radius:10px}
+aside button:not(.go):hover{background:#254071;border-color:#5D92D2;color:#fff}
+aside .repo.on{background:#243D74!important;border-color:#507FD1!important}
+aside .repo small{color:#B9C9E1}
+.sidebar-foot{border-top-color:#334674}
+.sidebar-foot p{color:#AFC1DA}
+.topbar{min-height:76px;border-bottom-color:#E2E9F4;box-shadow:0 2px 14px #16264d06;padding:14px clamp(18px,3.4vw,44px)}
+.topbar-logo{display:block;width:26px;height:26px;border-radius:7px}
+.crumb{gap:11px;color:#6A7990;font-size:12px;letter-spacing:.015em}
+.crumb strong{color:#23365C;font-weight:750}
+.connect-note{color:#59708C}
+.content{padding-top:28px}
+.simple-nav{border-bottom:1px solid #DEE8F6;padding-bottom:15px;gap:9px;margin-bottom:25px}
+.simple-nav button{border-radius:10px;border-color:#DDE7F4;padding:10px 17px;font-weight:700;color:#49617F}
+.simple-nav button[aria-pressed=true]{border-color:#A7C4FC;color:#144FB4;background:linear-gradient(120deg,#EBF3FF,#E8FDFC);box-shadow:0 5px 18px #225BD20F}
+button.go{background:linear-gradient(112deg,#255CE8,#128FC8);border-color:#246CE9;color:#fff;box-shadow:0 3px 12px #246ce81e}
+button.go:hover{background:linear-gradient(112deg,#164CCB,#0B7CAA);border-color:#1958CE;color:#fff}
+input,select,textarea,button{border-radius:10px}
+input:focus,select:focus,textarea:focus{border-color:#4289F7}
+.welcome{position:relative;margin:clamp(28px,5vh,68px) auto 0;border-color:#E0E8F4;border-radius:20px;padding:clamp(28px,4.3vw,52px);box-shadow:0 18px 60px #182A4A0A;overflow:hidden}
+.welcome:before{content:"";position:absolute;top:-160px;right:-120px;width:420px;height:420px;background:radial-gradient(circle,#65cde519,transparent 70%);pointer-events:none}
+.welcome-brand{margin:-9px 0 21px;max-width:275px}
+.welcome-brand img{max-width:100%;height:auto;display:block}
+.welcome h2{color:#152044;max-width:740px;font-size:clamp(26px,3.5vw,43px);letter-spacing:-.05em}
+.eyebrow{color:#1169CC;font-size:10px;letter-spacing:.19em}
+.steps{gap:20px;border-top-color:#E8EDF6;margin-top:32px}
+.steps span{color:#2672E6}
+.metrics{gap:15px}
+.metric,.docker-panel,details.is{border-color:#E1E8F3;box-shadow:0 6px 22px #182A4A08}
+.metric{border-radius:15px;padding:20px 21px}
+.metric .value{color:#1C2C53}
+.branch-grid-row,.branch-table{border-color:#E0E7F1}
+.branch-grid-row:hover{background:#F7FAFF}
+.docker-panel{border-radius:16px}
+.docker-panel h3{color:#203253}
+.deploy-readiness{background:#F8FAFF;border-color:#DCE5F4}
+.docker-activity{border-radius:16px}
+.activity-spinner{border-top-color:#2A79EA}
+.activity-icon{color:#226BDF}
+.progress-track span{background:linear-gradient(90deg,#235CE9,#0FBDB3)}
+.mini-led{background:#16BA9D}
+@media(max-width:980px){.app{grid-template-columns:minmax(230px,254px) minmax(0,1fr)}}
+@media(max-width:760px){
+ .app{grid-template-columns:1fr}
+ aside{position:relative;height:auto;min-height:0;overflow:visible;padding:18px 17px 12px;gap:12px}
+ aside .brand{margin-bottom:0}
+ aside #repos{max-height:210px;overflow:auto}
+ .sidebar-foot{margin-top:5px}
+ .topbar{min-height:62px}
+ .content{padding-top:18px}
+ .welcome{margin-top:14px}
+}
+@media(prefers-reduced-motion:reduce){.simple-nav button,.welcome,button.go{transition:none}}
 </style>
 </head>
 <body>
 <div class="app">
 <aside>
-  <div class="brand"><div class="bridge-symbol" aria-hidden="true">J</div><div class="brand-text"><small>DEVELOPMENT CONTROL</small><h1>Jembatan</h1></div></div><p class="sub">GitHub, ChatGPT manual, dan deployment. Satu tempat untuk mengawal pekerjaan.</p>
+  <div class="brand"><div class="bridge-symbol"><img src="/assets/jembatan-mark.svg" alt="" width="52" height="52"></div><div class="brand-text"><small>DEVELOPMENT CONTROL</small><h1>Jembatan</h1></div></div><p class="sub">GitHub, QA, dan deployment dalam satu kendali.</p>
   <div><label class="rail-label" for="tok">Akses workspace</label><div class="row auth-row"><input id="tok" type="password" placeholder="Token akses UI" autocomplete="off"><button id="login" class="go">Masuk</button></div></div>
   <div><label class="rail-label" for="q">Repository</label><input id="q" placeholder="Cari repository..." autocomplete="off"></div>
   <div class="sync-row"><button id="all">Pilih semua</button><button id="sync" class="go">Sinkron</button></div>
   <ul id="repos"></ul>
   <div class="sidebar-foot"><p><span class="mini-led" aria-hidden="true"></span>Tanpa API model berbayar</p><button id="logout" class="quiet">Keluar</button></div>
 </aside>
-<main><header class="topbar"><div class="crumb"><strong>Workspace</strong><span>/</span>Operasi repository</div><div class="connect-note"><span class="mini-led" aria-hidden="true"></span>ChatGPT manual · Eksekusi GitHub lokal</div></header><section class="content"><div id="note" role="status" aria-live="polite"></div>
+<main><header class="topbar"><div class="crumb"><img src="/assets/jembatan-mark.svg" alt="" width="26" height="26" class="topbar-logo"><strong>Workspace</strong><span>/</span>Operasi repository</div><div class="connect-note"><span class="mini-led" aria-hidden="true"></span>ChatGPT manual · Eksekusi GitHub lokal</div></header><section class="content"><div id="note" role="status" aria-live="polite"></div>
 <nav class="simple-nav" aria-label="Menu utama">
 <button type="button" id="nav-repos" aria-pressed="true">Repositories & Issues</button>
 <button type="button" id="nav-docker" aria-pressed="false">Docker & QA</button>
 </nav>
 <div id="docker-view" hidden></div>
-<div id="view"><div class="welcome"><span class="eyebrow">Mulai dari repository</span><h2>Satu kendali untuk setiap issue dan branch.</h2><p>Pilih repository di panel kiri. Jembatan akan membantu meninjau hubungan issue, commit, dan branch tanpa memerlukan API ChatGPT berbayar.</p><div class="steps"><div><span>01</span><strong>Sinkronkan repository</strong>Ambil branch dan issue dari GitHub.</div><div><span>02</span><strong>Kerjakan lewat ChatGPT</strong>Salin prompt, lalu tempel patch hasil analisis.</div><div><span>03</span><strong>Uji dan kirim PR</strong>Periksa hasil QA sebelum merge dan deploy.</div></div></div></div></section></main>
+<div id="view"><div class="welcome"><div class="welcome-brand"><img src="/assets/jembatan-lockup.svg" alt="Jembatan — Development Control" width="340" height="88"></div><span class="eyebrow">Mulai dari repository</span><h2>Satu kendali untuk GitHub, QA, dan deploy.</h2><p>Pilih repository di panel kiri. Jembatan akan membantu meninjau hubungan issue, commit, dan branch tanpa memerlukan API ChatGPT berbayar.</p><div class="steps"><div><span>01</span><strong>Sinkronkan repository</strong>Ambil branch dan issue dari GitHub.</div><div><span>02</span><strong>Kerjakan lewat ChatGPT</strong>Salin prompt, lalu tempel patch hasil analisis.</div><div><span>03</span><strong>Uji dan kirim PR</strong>Periksa hasil QA sebelum merge dan deploy.</div></div></div></div></section></main>
 <dialog class="confirm-dialog" id="branch-delete-dialog" aria-labelledby="branch-delete-title" aria-describedby="branch-delete-description"><h2 id="branch-delete-title">Hapus branch dari GitHub?</h2><p id="branch-delete-description"></p><p id="branch-delete-proof"></p><pre class="branch-delete-list" id="branch-delete-list" hidden></pre><p class="modal-error" id="branch-delete-error" role="alert"></p><div class="confirm-actions"><button type="button" id="branch-delete-cancel">Batal</button><button type="button" id="branch-delete-confirm" class="danger-action">Hapus</button></div></dialog>
 </div>
 <div class="toast-stack" id="toast-stack" aria-label="Notifikasi aktivitas" aria-live="polite" aria-relevant="additions"></div>
