@@ -280,7 +280,7 @@ def run_qa(app, repo, on_event=None):
                              "Checkout QA tidak bersih atau SHA Git tidak valid")
         except DockerError:
             source_reason = "Container QA tidak memiliki Git checkout yang dapat diverifikasi"
-        on_event("output", "[Jembatan] Bukti sumber QA: " + source_reason + "\\n")
+        on_event("output", "[Jembatan] Bukti sumber QA: " + source_reason + "\n")
     try:
         if on_event:
             out = _docker(app, "exec", name, *command, timeout=300,
