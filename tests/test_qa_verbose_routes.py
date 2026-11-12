@@ -12,6 +12,63 @@ class QARoutesTests(unittest.TestCase):
                 with self.assertRaisesRegex(bridge.Err, "tidak valid"):
                     bridge.repo_dir(repo)
 
+    def test_available_deploy_branches_only_shows_real_main_staging(self):
+        fake = [{"name": "main"}, {"name": "feature"}, {"name": "dev"}]
+        with patch.object(bridge, "gh", return_value={"default_branch": "main"}):
+            with patch.object(bridge, "gh_pages", return_value=fake):
+                with patch.object(bridge, "docker_action", return_value={"deploy_branch": "staging"}):
+                    result = bridge.deploy_branch_options("ha00i/Jembatan")
+        self.assertEqual(result["available"], ["main"])
+        self.assertEqual(result["configured"], "staging")
+        self.assertFalse(result["configured_exists"])
+
+    def test_stale_branch_must_not_be_silently_replaced(self):
+        settings = {"deploy_branch": "staging", "deploy_path": "/srv/app"}
+        with patch.object(bridge, "docker_action", return_value=settings) as docker:
+            with patch.object(bridge, "gh", side_effect=bridge.Err(
+                    'GitHub 404: {"message":"Branch not found"}', 502)):
+                result = bridge.deploy_readiness("ha00i/Jembatan")
+        self.assertFalse(result["qa_ready"])
+        self.assertIsNone(result["sha"])
+        self.assertEqual(result["branch"], "staging")
+        self.assertIn("Simpan aplikasi", result["reason"])
+        self.assertEqual(docker.call_count, 2)
+
+    def test_stale_branch_blocks_deploy_before_docker_actions(self):
+        settings = {"deploy_branch": "staging", "deploy_path": "/srv/app"}
+        with patch.object(qa_jobs, "active", return_value=False):
+            with patch.object(bridge, "docker_action", return_value=settings) as docker:
+                with patch.object(bridge, "gh", side_effect=bridge.Err(
+                        'GitHub 404: {"message":"Branch not found"}', 502)):
+                    with self.assertRaisesRegex(bridge.Err, "tidak ada di GitHub"):
+                        bridge.deploy("ha00i/Jembatan", "ha00i/Jembatan")
+        self.assertEqual(docker.call_count, 1)
+
+    def test_save_app_rejects_nonexistent_branch(self):
+        with patch.object(bridge, "deploy_branch_options",
+                          return_value={"available": ["main"], "configured": "staging"}):
+            with patch.object(bridge, "docker_action") as docker:
+                with self.assertRaisesRegex(bridge.Err, "Pilih branch tersedia: main"):
+                    bridge.save_docker_app({"repo": "ha00i/Jembatan",
+                                            "deploy_branch": "staging"})
+                docker.assert_not_called()
+
+    def test_save_app_accepts_existing_branch(self):
+        with patch.object(bridge, "deploy_branch_options",
+                          return_value={"available": ["main"], "configured": "main"}):
+            with patch.object(bridge, "docker_action", return_value={"deploy_branch": "main"}) as action:
+                result = bridge.save_docker_app({"repo": "ha00i/Jembatan", "deploy_branch": "main"})
+        self.assertEqual(result["deploy_branch"], "main")
+        self.assertIs(action.call_args.args[0], bridge.docker_control.save_app)
+
+    def test_branch_options_route_uses_live_github(self):
+        with patch.object(bridge, "deploy_branch_options",
+                          return_value={"available": ["main"]}) as check:
+            result = bridge.ROUTES[("GET", "/api/deploy/branches")](
+                {"repo": "ha00i/Jembatan"}, {})
+        self.assertEqual(result["available"], ["main"])
+        check.assert_called_once_with("ha00i/Jembatan")
+
     def test_start_route_is_exposed(self):
         with patch.object(bridge, "docker_action", return_value={"job_id": "job1"}) as action:
             result = bridge.ROUTES[("POST", "/api/docker/qa/start")]({}, {"repo": "ha00i/Jembatan"})
