@@ -227,7 +227,7 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
 <main><header class="topbar"><div class="crumb"><strong>Workspace</strong><span>/</span>Operasi repository</div><div class="connect-note"><span class="mini-led" aria-hidden="true"></span>ChatGPT manual · Eksekusi GitHub lokal</div></header><section class="content"><div id="note" role="status" aria-live="polite"></div><div id="view"><div class="welcome"><span class="eyebrow">Mulai dari repository</span><h2>Satu kendali untuk setiap issue dan branch.</h2><p>Pilih repository di panel kiri. Jembatan akan membantu meninjau hubungan issue, commit, dan branch tanpa memerlukan API ChatGPT berbayar.</p><div class="steps"><div><span>01</span><strong>Sinkronkan repository</strong>Ambil branch dan issue dari GitHub.</div><div><span>02</span><strong>Kerjakan lewat ChatGPT</strong>Salin prompt, lalu tempel patch hasil analisis.</div><div><span>03</span><strong>Uji dan kirim PR</strong>Periksa hasil QA sebelum merge dan deploy.</div></div></div></div></section></main>
 <dialog class="confirm-dialog" id="branch-delete-dialog" aria-labelledby="branch-delete-title"><h2 id="branch-delete-title">Hapus branch dari GitHub?</h2><p id="branch-delete-description"></p><p id="branch-delete-proof"></p><label for="branch-delete-input">Ketik nama branch persis untuk konfirmasi</label><input id="branch-delete-input" autocomplete="off" spellcheck="false"><p class="modal-error" id="branch-delete-error" role="alert"></p><div class="confirm-actions"><button type="button" id="branch-delete-cancel">Batal</button><button type="button" id="branch-delete-confirm" class="danger-action" disabled>Hapus branch</button></div></dialog>
 </div>
-<aside class="patch-toast" id="patch-toast" role="alert" aria-labelledby="patch-toast-title" hidden>
+<div class="patch-toast" id="patch-toast" role="alert" aria-labelledby="patch-toast-title" hidden>
   <div class="patch-toast-top">
     <div class="patch-toast-heading"><span class="patch-toast-mark" aria-hidden="true">!</span><span id="patch-toast-title">Patch gagal diterapkan</span></div>
     <button type="button" class="patch-toast-close" id="patch-toast-close" aria-label="Tutup notifikasi">×</button>
@@ -235,7 +235,7 @@ h3{margin:32px 0 10px;font-size:16px;letter-spacing:-.01em}
   <p class="patch-toast-message" id="patch-toast-message"></p>
   <details id="patch-toast-details"><summary>Lihat detail error</summary><pre id="patch-toast-log"></pre></details>
   <div class="patch-toast-actions"><button type="button" id="patch-toast-copy">Salin detail</button><button type="button" class="go" id="patch-toast-dismiss">Mengerti</button></div>
-</aside>
+</div>
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -479,7 +479,7 @@ $('#view').onclick=async e=>{
     if(r){q('[data-p]').hidden=false;const t=q('[data-prompt]');t.value=r.prompt;copy(t);note('Prompt siap ('+r.chars+' karakter) dan sudah disalin. Tempel ke ChatGPT.')}return;
   }
   if(act==='apply'){
-    const r=await run('Menerapkan patch dan menguji',()=>api('/api/apply','POST',{repo,issue:n,reply:q('[data-reply]').value,branch:S.applied[repo+'#'+n]}),showPatchError);
+    const r=await run('Menerapkan patch dan menguji',()=>api('/api/apply','POST',{repo,issue:n,reply:q('[data-reply]').value,branch:S.applied[repo+'#'+n]}),err=>{if(/patch tidak cocok|git apply gagal|patch failed|patch does not apply/i.test(String(err.message||'')))showPatchError(err)});
     if(!r)return;S.applied[repo+'#'+n]=r.branch;S.open=n;
     const res=q('[data-res]');res.hidden=false;
     res.textContent='Branch '+r.branch+' (commit '+r.commit+')\n'+(r.test?(r.test.ok?'Test lolos.':'Test GAGAL.')+'\n'+r.test.output:'TEST_CMD belum diatur, jadi tidak ada test otomatis.');
