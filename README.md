@@ -43,6 +43,24 @@ auto-merge, auto-deploy, atau klaim bahwa QA pada container existing telah
 menguji commit terbaru secara otomatis. Legacy `TEST_CMD` tidak lagi dijalankan
 saat apply patch demi mencegah tes bebas memakai Docker socket production.
 
+### Animasi aktivitas dan notifikasi
+
+- **Menjalankan QA / Deploy:** muncul kartu status dengan spinner, bar animasi
+  indeterminate, durasi aktual yang terus bertambah, dan penanda proses berjalan.
+  Ini bukan persentase progres atau streaming log backend.
+- **Setelah selesai:** kartu menampilkan status PASS/FAIL dan hasil teks; hasil
+  terakhir tetap terlihat meskipun panel Docker dirender ulang. Ada tombol
+  **Salin hasil**.
+- **Notifikasi:** toast sukses, gagal, informasi, dan peringatan dengan animasi
+  singkat, tombol tutup, dan aksesibilitas `prefers-reduced-motion`.
+- **Anti-duplikasi:** selama QA/deploy berlangsung, tombol tindakan mutasi
+  terkait dinonaktifkan di browser. Backend masih perlu antrean persisten dan
+  gate server-side untuk mencegah job ganda lintas tab/restart.
+
+UI yang berubah hanya `index.html`; API Docker dan perilaku container tidak
+diubah. Uji kontrak sumber UI: `python3 -m unittest discover -s tests
+-p "test_docker_ui_activity_contract.py" -v`.
+
 ## Manajemen branch (fitur baru)
 
 Setelah repository disinkronkan, buka **Manajemen branch** di bawah daftar issue.
