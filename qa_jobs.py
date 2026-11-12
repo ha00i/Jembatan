@@ -47,6 +47,9 @@ def _public(job, app):
         "elapsed_seconds": int(max(0, (job["finished_at"] or now) - job["started_at"])),
         "exit_code": job["exit_code"], "ok": job["ok"],
         "log": _sanitize(job["log"], app), "truncated": job["truncated"],
+        "target_branch": job.get("target_branch", "main"),
+        "source_sha": job.get("source_sha"), "qa_verified": job.get("qa_verified", False),
+        "verify_reason": job.get("verify_reason", "Belum ada bukti SHA"),
     }}
 
 
@@ -71,13 +74,37 @@ def _runner(app, job):
                     job["updated_at"] = time.time()
             elif kind == "output":
                 report(text)
+        branch = job["target_branch"]
+        expected_sha = None
+        target_reason = "GitHub branch belum diverifikasi"
+        try:
+            remote = app.gh(f"/repos/{job['repo']}/branches/{branch}")
+            expected_sha = remote["commit"]["sha"]
+            if not re.fullmatch(r"[a-fA-F0-9]{40}", expected_sha):
+                expected_sha = None
+            if expected_sha:
+                target_reason = "Bukti SHA GitHub tersedia"
+        except (AttributeError, KeyError, TypeError, ValueError, Exception):
+            target_reason = "GitHub branch tidak dapat dibaca saat QA"
+        report(f"[Jembatan] Target deploy: {branch} ({expected_sha[:12] if expected_sha else 'belum diketahui'})\\n")
         result = docker_control.run_qa(app, job["repo"], on_event=on_event)
+        source_sha = result.get("source_sha")
+        verified = bool(result["ok"] and expected_sha and
+                        result.get("source_verified") and source_sha == expected_sha)
+        reason = ("SHA QA sama dengan branch GitHub pada awal tes" if verified else
+                  result.get("source_reason") or target_reason or "SHA QA belum terverifikasi")
+        if not verified and result["ok"] and source_sha and expected_sha and source_sha != expected_sha:
+            reason = "SHA container QA berbeda dari branch target"
         with _LOCK:
+            job["source_sha"] = source_sha
+            job["qa_verified"] = verified
+            job["verify_reason"] = reason
             job["ok"] = result["ok"]
             job["exit_code"] = 0 if result["ok"] else None
             job["state"] = "passed" if result["ok"] else "failed"
             job["stage"] = "Tes selesai" if result["ok"] else "Tes gagal"
         report("\n[Jembatan] " + ("PASS" if result["ok"] else "FAIL") + " — periksa hasil tes di atas.\n")
+        report("[Jembatan] Bukti commit: " + reason + "\n")
     except Exception as exc:
         # Error strings from the Docker controller can contain container output.
         report("\n[Jembatan] ERROR: " + str(exc)[-1200:] + "\n")
@@ -107,7 +134,9 @@ def start(app, repo):
         identifier = uuid.uuid4().hex
         now = time.time()
         job = dict(id=identifier, repo=repo, container=mapping["qa_container"],
-                   profile=mapping["qa_profile"], state="queued", stage="Menyiapkan QA",
+                   profile=mapping["qa_profile"], target_branch=mapping.get("deploy_branch", "main"),
+                   source_sha=None, qa_verified=False, verify_reason="Menunggu pemeriksaan",
+                   state="queued", stage="Menyiapkan QA",
                    started_at=now, updated_at=now, finished_at=None,
                    ok=None, exit_code=None, log="", truncated=False)
         # Keep only the last job per repo; bound memory across repositories.
@@ -133,3 +162,25 @@ def status(app, repo):
 def active():
     with _LOCK:
         return _ACTIVE is not None
+
+
+def require_verified(app, repo, branch, sha):
+    """Fail-closed merge gate for Docker deploy. Only exact QA-run branch/SHA passes."""
+    if not isinstance(sha, str) or not re.fullmatch(r"[a-fA-F0-9]{40}", sha):
+        raise docker_control.DockerError("SHA target deployment tidak valid", 409)
+    mapping = docker_control._app_settings(app, repo)
+    with _LOCK:
+        record = _JOBS.get(repo)
+        valid = bool(record and record.get("state") == "passed" and
+                     record.get("qa_verified") is True and
+                     record.get("source_sha") == sha and
+                     record.get("target_branch") == branch and
+                     record.get("container") == mapping.get("qa_container") and
+                     record.get("profile") == mapping.get("qa_profile"))
+        if valid:
+            return {"sha": sha, "branch": branch, "qa_job_id": record["id"]}
+        detail = record.get("verify_reason") if record else "Belum ada hasil QA"
+    raise docker_control.DockerError(
+        "Deploy diblokir: QA PASS terverifikasi untuk commit " + sha[:12] +
+        " pada branch " + branch + " belum tersedia. " + detail +
+        ". Jalankan QA pada checkout SHA yang sama.", 409)
