@@ -191,9 +191,11 @@ function drawRepos(){
 $('#repos').onclick=e=>{const b=e.target.closest('[data-open]');if(b)openRepo(b.dataset.open)};
 
 async function openRepo(n){
-  S.repo=n;S.filter='all';S.issueQuery='';drawRepos();
+  S.repo=n;S.filter='all';S.issueQuery='';S.data=null;drawRepos();
+  $('#view').innerHTML='<div class="welcome"><span class="eyebrow">Memuat repository</span><h2>Memeriksa issue dan branch...</h2><p>Data dibaca dari sinkronisasi lokal dan GitHub.</p></div>';
   const d=await run('Membaca branch dan issue',()=>api('/api/overview?repo='+encodeURIComponent(n)));
   if(d){S.data=d;drawMain()}
+  else{$('#view').innerHTML='<div class="welcome"><span class="eyebrow">Repository belum siap</span><h2>Workspace belum dapat dibuka.</h2><p>Sinkronkan repo terlebih dahulu, lalu periksa pesan kesalahan di atas.</p></div>'}
 }
 function drawMain(){
   const d=S.data,cnt=k=>d.issues.filter(i=>i.status===k).length;
