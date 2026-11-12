@@ -127,6 +127,49 @@ class QAJobTests(unittest.TestCase):
                 qa.start(self.app, "ha00i/Jembatan")
         self.assertFalse(qa.active())
 
+    def test_verified_qa_evidence_allows_same_branch_and_sha(self):
+        sha = "a" * 40
+        self.app.gh = lambda path: {"commit": {"sha": sha}}
+        with patch.object(qa.docker_control, "_app_settings", side_effect=mapping):
+            with patch.object(qa.docker_control, "run_qa", return_value={
+                "ok": True, "source_verified": True, "source_sha": sha,
+                "source_reason": "Git clean and HEAD matched", "output": "OK"
+            }):
+                qa.start(self.app, "ha00i/Jembatan")
+                result = self.wait_done()
+                self.assertTrue(result["qa_verified"])
+                proof = qa.require_verified(self.app, "ha00i/Jembatan", "main", sha)
+        self.assertEqual(proof["sha"], sha)
+
+    def test_changed_sha_or_target_branch_blocks_deploy(self):
+        sha = "a" * 40
+        self.app.gh = lambda path: {"commit": {"sha": sha}}
+        with patch.object(qa.docker_control, "_app_settings", side_effect=mapping):
+            with patch.object(qa.docker_control, "run_qa", return_value={
+                "ok": True, "source_verified": True, "source_sha": sha
+            }):
+                qa.start(self.app, "ha00i/Jembatan")
+                self.wait_done()
+                with self.assertRaisesRegex(qa.docker_control.DockerError, "Deploy diblokir"):
+                    qa.require_verified(self.app, "ha00i/Jembatan", "main", "b" * 40)
+                with self.assertRaises(qa.docker_control.DockerError):
+                    qa.require_verified(self.app, "ha00i/Jembatan", "staging", sha)
+
+    def test_passed_test_with_unverified_container_does_not_grant_deploy(self):
+        sha = "a" * 40
+        self.app.gh = lambda path: {"commit": {"sha": sha}}
+        with patch.object(qa.docker_control, "_app_settings", side_effect=mapping):
+            with patch.object(qa.docker_control, "run_qa", return_value={
+                "ok": True, "source_verified": False, "source_sha": None,
+                "source_reason": "Git not installed", "output": "OK"
+            }):
+                qa.start(self.app, "ha00i/Jembatan")
+                result = self.wait_done()
+                self.assertEqual(result["state"], "passed")
+                self.assertFalse(result["qa_verified"])
+                with self.assertRaisesRegex(qa.docker_control.DockerError, "Git not installed"):
+                    qa.require_verified(self.app, "ha00i/Jembatan", "main", sha)
+
     def test_stdout_callback_receives_chunks_from_real_subprocess(self):
         chunks = []
         out = qa.docker_control._command([
