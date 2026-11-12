@@ -256,7 +256,7 @@ def deploy(app, repo, confirm):
         script = f"cd -- {quoted} && git pull --ff-only && docker compose up -d --build && docker compose ps"
         output = _command(["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
                            "-p", str(cfg["port"]), f"{cfg['username']}@{cfg['host']}",
-                           "sh", "-c", script], timeout=1200)
+                           "sh -lc " + shlex.quote(script)], timeout=1200)
         status = "Status tercantum pada output deploy remote."
     return {"repo": repo, "path": path, "ok": True, "output": output[-8000:],
             "status": status[-4000:]}
