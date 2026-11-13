@@ -35,6 +35,20 @@ class IssueInventoryUIContract(unittest.TestCase):
         self.assertIn("esc(c.author||'GitHub user')", HTML)
         self.assertIn("white-space:pre-wrap;overflow-wrap:anywhere", HTML)
 
+    def test_issue_detail_has_its_own_scroll_area(self):
+        self.assertIn('data-issue-content role="region"', HTML)
+        self.assertIn('aria-label="Isi lengkap issue dan komentar, gulir di dalam panel"', HTML)
+        self.assertIn('tabindex="0" hidden', HTML)
+        self.assertIn("max-height:min(65dvh,640px);overflow-y:auto;overflow-x:hidden", HTML)
+        self.assertIn("scrollbar-gutter:stable;overscroll-behavior-y:auto", HTML)
+
+    def test_mobile_scroll_stays_inside_reading_panel(self):
+        self.assertIn("@media(max-width:760px){.issue-full-detail{max-height:min(55dvh,440px)", HTML)
+        self.assertIn("-webkit-overflow-scrolling:touch", HTML)
+        self.assertIn(".issue-full-detail:focus-visible", HTML)
+        self.assertIn(".issue-full-body,.issue-comment pre{white-space:pre-wrap", HTML)
+        self.assertNotIn(".issue-full-detail{height:100vh", HTML)
+
     def test_issue_search_and_filter_reset_page(self):
         self.assertIn("S.issueQuery=e.target.value;S.issuePage=0;renderIssueList()", HTML)
         self.assertIn("S.filter=c.dataset.chip;S.issuePage=0", HTML)
