@@ -4,6 +4,7 @@ import base64, hashlib, hmac, json, os, re, shlex, subprocess, sys, tempfile, th
 import branch_manager
 import docker_control
 import qa_jobs
+import workflow
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib import error as urlerr, request as urlreq
@@ -861,6 +862,9 @@ def legacy_qa(r):
 # ---------- HTTP ----------
 ROUTES = {
     ("GET", "/api/repos"): lambda q, b: list_repos(),
+    # Opt-in Superpowers foundation: separate from the existing prompt pipeline.
+    ("POST", "/api/workflow/start"): lambda q, b: workflow.start_route(sys.modules[__name__], b),
+    ("GET", "/api/workflow/state"): lambda q, b: workflow.state_route(sys.modules[__name__], q),
     ("POST", "/api/sync"): lambda q, b: sync(b["repos"]),
     ("GET", "/api/overview"): lambda q, b: overview(q["repo"]),
     ("GET", "/api/issue/detail"): lambda q, b: issue_detail(
@@ -942,9 +946,14 @@ class H(BaseHTTPRequestHandler):
                 raise Err("Isi terlalu besar", 413)
             body = json.loads(self.rfile.read(n) or b"{}") if method == "POST" else {}
             q = {k: v[0] for k, v in parse_qs(u.query).items()}
-            with LOCK:
+            if u.path.startswith("/api/workflow/"):
+                # This subsystem locks per (repo, issue) and uses SQLite transactions.
+                # Legacy endpoints keep their existing global lock unchanged.
                 self.reply(200, fn(q, body))
-        except Err as e:
+            else:
+                with LOCK:
+                    self.reply(200, fn(q, body))
+        except (Err, workflow.WorkflowError) as e:
             self.reply(e.code, {"error": str(e)})
         except (KeyError, ValueError, TypeError):
             self.reply(400, {"error": "Input tidak lengkap atau tidak valid"})
