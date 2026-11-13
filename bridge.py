@@ -434,6 +434,10 @@ def complete_qa_issue(r, issue_number, confirmed):
     issue = gh(f"/repos/{r}/issues/{n}")
     if issue.get("pull_request"):
         raise Err("Nomor yang dipilih adalah PR, bukan issue", 409)
+    if QA_TRACKER not in (issue.get("body") or ""):
+        pr = issue_pr_status(r, n)
+        if not pr.get("merged"):
+            raise Err("Issue belum memiliki PR merged dari Jembatan. QA PASS belum boleh menutupnya.", 409)
     if issue.get("state") != "closed":
         gh(f"/repos/{r}/issues/{n}/comments", "POST", {
             "body": "QA MANUAL PASS — operator Jembatan menyatakan tes telah selesai. "
