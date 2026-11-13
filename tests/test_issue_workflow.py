@@ -46,6 +46,13 @@ class PromptContract(TestCase):
             self.assertIn(fragment, result["prompt"])
         self.assertTrue(result["complete_context"])
 
+    def test_prompt_autoselects_real_source_when_no_files_given(self):
+        with patch.object(bridge, "git", side_effect=self.git_stub):
+            result = bridge.build_prompt("ha00i/Jembatan", 11, target="main")
+        self.assertTrue(result["auto_context"])
+        self.assertIn("app.py", result["files_included"])
+        self.assertIn("F" * 16000, result["prompt"])
+
     def test_large_context_fails_explicitly(self):
         def large(d, *args, **kw):
             if args[0] == "show":
