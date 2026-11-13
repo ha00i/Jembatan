@@ -7,7 +7,7 @@ import qa_jobs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib import error as urlerr, request as urlreq
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, quote as urlquote
 
 GH_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 ADMIN = os.environ.get("ADMIN_TOKEN") or GH_TOKEN  # tanpa ADMIN_TOKEN, GitHub token dipakai untuk masuk UI
@@ -311,16 +311,18 @@ def docker_action(func, *args):
         raise Err(str(e), e.code) from e
 
 def deploy_branch_options(r):
-    """List supported deploy branches actually present on the selected GitHub repo."""
-    repo_dir(r)  # full-name validation, no checkout required
+    """Show actual GitHub branches, not a hardcoded main/staging pair."""
+    repo_dir(r)
     meta = gh(f"/repos/{r}")
     branches = gh_pages(f"/repos/{r}/branches", limit=5)
-    names = {item.get("name") for item in branches if isinstance(item, dict)}
-    available = [name for name in ("main", "staging") if name in names]
+    valid = {item.get("name") for item in branches if isinstance(item, dict)
+             and docker_control.valid_branch(item.get("name"))}
+    default = meta.get("default_branch", "")
+    available = sorted(valid, key=lambda name: (name != default, name.lower()))
     current = docker_action(docker_control._app_settings, r)["deploy_branch"]
     return {"repo": r, "available": available, "configured": current,
-            "configured_exists": current in available,
-            "default_branch": meta.get("default_branch", "")}
+            "configured_exists": current in valid,
+            "default_branch": default, "truncated": len(branches) >= 500}
 
 
 def save_docker_app(body):
@@ -329,11 +331,14 @@ def save_docker_app(body):
     r = body.get("repo")
     repo_dir(r)
     branch = body.get("deploy_branch", "main")
-    if branch not in ("main", "staging"):
-        raise Err("Target deploy hanya boleh main atau staging", 409)
+    if not docker_control.valid_branch(branch):
+        raise Err("Branch deploy tidak valid", 409)
+    mode = body.get("qa_branch_mode", "active")
+    if mode not in ("active", "default"):
+        raise Err("Mode branch QA harus aktif atau default", 409)
     options = deploy_branch_options(r)
     if branch not in options["available"]:
-        names = ", ".join(options["available"]) or "tidak ada main/staging"
+        names = ", ".join(options["available"][:12]) or "belum ada"
         raise Err(f"Branch '{branch}' tidak ada pada {r}. Pilih branch tersedia: {names}.", 409)
     return docker_action(docker_control.save_app, body)
 
@@ -341,10 +346,10 @@ def save_docker_app(body):
 def deployment_target(r):
     settings = docker_action(docker_control._app_settings, r)
     branch = settings.get("deploy_branch", "main")
-    if branch not in ("main", "staging"):
-        raise Err("Branch target deployment tidak didukung", 409)
+    if not docker_control.valid_branch(branch):
+        raise Err("Branch target deployment tidak valid", 409)
     try:
-        remote = gh(f"/repos/{r}/branches/{branch}")
+        remote = gh(f"/repos/{r}/branches/{urlquote(branch, safe='')}")
     except Err as error:
         if "Branch not found" in str(error) and "GitHub 404:" in str(error):
             raise Err(f"Branch '{branch}' tidak ada di GitHub untuk {r}. Pilih branch yang tersedia di Docker & QA, lalu klik Simpan aplikasi.", 409) from error
@@ -373,7 +378,9 @@ def deploy_readiness(r):
         proof = docker_action(qa_jobs.require_verified, r, branch, sha)
         return {"repo": r, "branch": branch, "sha": sha,
                 "qa_ready": True, "qa_job_id": proof["qa_job_id"],
-                "deploy_path": settings["deploy_path"], "reason": "QA PASS untuk SHA target."}
+                "deploy_path": settings["deploy_path"], "qa_branch": proof.get("qa_branch"),
+                "reason": ("QA PASS pada branch " + str(proof.get("qa_branch") or "QA") +
+                           "; commit identik dengan target deploy " + branch + ".")}
     except Err as error:
         if error.code != 409:
             raise
