@@ -62,6 +62,53 @@ chat ChatGPT dan menempel balasannya kembali. Sisanya otomatis.
 3. Tanpa Docker: `export $(cat .env | xargs) && python3 bridge.py` lalu buka http://192.168.1.2:5111 (atau http://localhost:5111 dari server itu sendiri)
    Dengan Docker: `mkdir -p /srv/jembatan/repos && docker compose up -d --build`
 
+## Deteksi otomatis lokasi Docker Compose
+
+Jika lupa mengisi **Path Compose aplikasi**, buka repository di sidebar lalu
+**Docker & QA → Deteksi path Compose**. Jembatan membaca label
+`com.docker.compose.project.working_dir` dari container Docker Compose,
+termasuk container yang berhenti, serta pengaturan path sebelumnya dan
+checkout sinkron bila tersedia. Tidak memerlukan API model atau token tambahan.
+
+Setiap kandidat dibedakan sebagai **Terverifikasi** atau **Belum
+terverifikasi**:
+- Pada **Docker Lokal**, folder Compose harus bisa dibaca dari container
+  Jembatan, memiliki checkout Git dengan remote yang cocok ke repository,
+  serta salah satu `compose.yaml`, `compose.yml`, `docker-compose.yml`,
+  atau `docker-compose.yaml`.
+- Pada **Remote SSH**, pemeriksaan dilakukan pada host SSH yang sudah
+  dikonfigurasi, dengan koneksi SSH key/known_hosts yang ada.
+- Path host yang belum di-mount, remote Git berbeda, atau checkout hasil
+  **Sinkron** yang tidak terbukti sebagai folder deploy tetap ditampilkan
+  sebagai petunjuk, **bukan sebagai target deploy yang terverifikasi**.
+  Untuk Docker lokal, mount folder host deployment ke path yang sama dalam
+  container Jembatan jika memang akan digunakan untuk deploy.
+
+Tekan **Pakai path** untuk memasukkan kandidat yang sudah terverifikasi ke
+isian, lalu **Simpan aplikasi**. Deteksi **tidak** menjalankan `git pull`,
+`docker compose up`, QA, atau deploy. Memilih path juga **tidak** menyimpan
+otomatis dan tidak mengubah branch deploy atau sumber branch QA.
+
+Jika yang terlupa adalah lokasi Compose **Jembatan sendiri** pada host,
+tanpa membuka UI, gunakan:
+
+```bash
+sudo docker ps -aq --filter 'label=com.docker.compose.service=jembatan' |
+  xargs -r sudo docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' |
+  sort -u
+```
+
+Perintah itu hanya membaca metadata; jika tidak ada label Compose/container
+yang cocok, hasilnya kosong. Jangan menebak path deploy atau mengganti
+mapping production secara otomatis.
+
+Tes fitur (tanpa menjalankan Docker):
+
+```bash
+python3 -m unittest discover -s tests -p 'test_docker_compose_discovery.py' -v
+python3 -m unittest discover -s tests -p 'test_docker_compose_discovery_ui_contract.py' -v
+```
+
 ## Navigasi ringkas dan ruang daftar issue
 
 Menu atas **Repositories & Issues / Docker & QA** yang sebelumnya
