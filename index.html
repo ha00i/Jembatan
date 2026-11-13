@@ -867,7 +867,7 @@ $('#view').onclick=async e=>{
     if(r){
       const parts=Array.isArray(r.parts)&&r.parts.length?r.parts:[r.prompt].filter(Boolean);
       if(!parts.length)return notify('Server tidak mengirim isi prompt.','error');
-      const record={parts,index:0,id:String(r.chars)+'-'+repo+'#'+n};
+      const record={parts,index:0,id:r.package_id||('repo-'+n)};
       S.promptPacks[repo+'#'+n]=record;
       q('[data-p]').hidden=false;
       q('[data-prompt-files]').textContent=(r.auto_context?'Konteks otomatis':'Konteks dipilih')+
