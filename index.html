@@ -730,6 +730,40 @@ $('#view').onclick=async e=>{
   if(act==='toggle-closed'){S.showClosed=!S.showClosed;return drawMain()}
   if(act==='copy')return copy(q(b.dataset.sel));
   if(act==='deploy')return $('#nav-docker').click();
+  if(act==='qa-fail'){
+    const log=q('[data-qa-log]').value.trim();
+    if(!log)return notify('Tempel log QA gagal dahulu.','warning');
+    const result=await run('Melaporkan QA gagal',()=>api('/api/qa/failure','POST',{repo,issue:n,log}));
+    if(result){
+      q('[data-qa-report]').hidden=false;
+      q('[data-qa-report-note]').textContent='Issue #'+result.issue+
+        (result.reopened?' dibuka ulang.':result.created?' dibuat.':' diperbarui.')+' '+result.url;
+      q('[data-qa-prompt]').value=result.prompt;
+      copy(q('[data-qa-prompt]'));
+      notify('Issue diperbarui dan prompt lengkap disalin.','success','QA gagal');
+      S.showClosed=true;
+    }
+    return;
+  }
+  if(act==='merge-pr'){
+    const entry=S.prMerges[repo+'#'+n];
+    if(!entry)return notify('Belum ada PR untuk merge. Push terlebih dahulu.','warning');
+    if(q('[data-pr-target]').value!==entry.base){
+      return notify('Branch tujuan berubah. Perbarui PR dahulu.','warning');
+    }
+    if(!confirm('Merge PR #'+entry.number+' ke '+entry.base+
+      ' sekarang? QA tetap dijalankan manual setelah merge.'))return;
+    const result=await run('Menggabungkan PR',()=>api('/api/pr/merge','POST',{
+      repo,issue:n,pr_number:entry.number,base:entry.base,head_sha:entry.head_sha}));
+    if(result?.merged){
+      q('[data-pr-stage]').hidden=true;
+      q('[data-qa-stage]').hidden=false;
+      S.qaIssueNumber=n;
+      notify('PR merged ke '+result.branch+'. Selanjutnya jalankan QA manual.','success','Merge selesai');
+      refreshBranches(repo);
+    }
+    return;
+  }
   if(act==='prompt'){
     const files=q('[data-files]').value.split(',').map(s=>s.trim()).filter(Boolean);
     const r=await run('Menyusun prompt',()=>api('/api/prompt','POST',{repo,issue:n,branch:q('[data-br]').value,files}));
@@ -744,9 +778,20 @@ $('#view').onclick=async e=>{
     q('[data-f]').hidden=!r.followup;if(r.followup)q('[data-follow]').value=r.followup;return;
   }
   if(act==='push'){
-    if(!confirm('Push '+S.applied[repo+'#'+n]+' ke GitHub dan buat PR?'))return;
-    const r=await run('Push dan membuat PR',()=>api('/api/push','POST',{repo,issue:n,branch:S.applied[repo+'#'+n]}));
-    if(r)q('[data-res]').textContent+='\n\n'+(r.pr?'PR: '+r.pr:'Sudah di-push, tetapi PR gagal dibuat: '+r.error);
+    const target=q('[data-pr-target]').value;
+    if(!target)return notify('Pilih branch tujuan PR dahulu.','warning');
+    if(!confirm('Push '+S.applied[repo+'#'+n]+' lalu buat PR ke '+target+'?'))return;
+    const r=await run('Push dan membuat PR',()=>api('/api/push','POST',{
+      repo,issue:n,branch:S.applied[repo+'#'+n],target}));
+    if(r){
+      q('[data-res]').textContent+='\n\n'+(r.pr?'PR ke '+r.base+': '+r.pr:'Sudah di-push, PR gagal: '+r.error);
+      if(r.pr&&r.number&&r.head_sha){
+        S.prMerges[repo+'#'+n]={number:r.number,base:r.base,head_sha:r.head_sha};
+        q('[data-pr-stage]').hidden=false;
+        q('[data-pr-link]').href=r.pr;
+        q('[data-pr-link]').textContent='PR #'+r.number+' menuju '+r.base;
+      }
+    }
   }
 };
 
