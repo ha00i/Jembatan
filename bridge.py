@@ -426,7 +426,8 @@ def issue_pr_status(r, issue_number):
             "url": pr.get("html_url"), "base": (pr.get("base") or {}).get("ref"),
             "head_sha": (pr.get("head") or {}).get("sha"),
             "merge_sha": pr.get("merge_commit_sha") if pr.get("merged_at") else None,
-            "state": pr.get("state"), "merged": bool(pr.get("merged_at"))}
+            "state": pr.get("state"), "merged": bool(pr.get("merged_at")),
+            "merge_sha": pr.get("merge_commit_sha") if pr.get("merged_at") else None}
 
 
 def complete_qa_issue(r, issue_number, confirmed):
