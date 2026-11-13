@@ -93,7 +93,7 @@ def repo_dir(r):
 
 
 def need_branch(b):
-    if not b or not BRANCH_RE.match(b) or b.startswith("-"):
+    if not docker_control.valid_branch(b):
         raise Err("Nama branch tidak valid")
     return b
 
@@ -449,6 +449,7 @@ def complete_qa_issue(r, issue_number, confirmed):
 
 # ---------- QA manual / automated failure feedback to one GitHub issue ----------
 QA_TRACKER = "<!-- jembatan:qa-tracker -->"
+QA_REPORT_LOCK = threading.Lock()
 
 
 def qa_followup_prompt(r, issue, log):
@@ -471,6 +472,12 @@ def qa_followup_prompt(r, issue, log):
 
 
 def report_qa_failure(r, issue_number=None, log="", branch=None):
+    """Serialize report writes so concurrent failed jobs reuse one issue."""
+    with QA_REPORT_LOCK:
+        return _report_qa_failure_unlocked(r, issue_number, log, branch)
+
+
+def _report_qa_failure_unlocked(r, issue_number=None, log="", branch=None):
     """Idempotent tracker-or-linked-issue reporting; invoked only after user QA."""
     repo_dir(r)
     if not isinstance(log, str) or not log.strip():
@@ -501,6 +508,9 @@ def report_qa_failure(r, issue_number=None, log="", branch=None):
         candidates = gh_pages(f"/repos/{r}/issues?state=all&sort=updated", 5)
         issue = next((i for i in candidates if not i.get("pull_request") and
                       QA_TRACKER in (i.get("body") or "")), None)
+        if issue is None and len(candidates) >= 500:
+            raise Err("Lebih dari 500 issue; pilih issue terkait secara eksplisit "
+                      "agar tidak membuat issue QA duplikat.", 409)
     detail = (f"QA gagal untuk {r}" +
               (f" (branch {branch})" if branch else "") +
               f".\n\n{fingerprint}\n\n~~~~text\n{shown_log}\n~~~~")
@@ -519,7 +529,8 @@ def report_qa_failure(r, issue_number=None, log="", branch=None):
     if not created:
         # Avoid repeated comments for an unchanged failure on a rerun.
         comments = gh_pages(f"/repos/{r}/issues/{issue['number']}/comments", 5)
-        if not any(fingerprint in (c.get("body") or "") for c in comments):
+        if (fingerprint not in (issue.get("body") or "") and
+                not any(fingerprint in (c.get("body") or "") for c in comments)):
             gh(f"/repos/{r}/issues/{issue['number']}/comments", "POST", {
                 "body": "QA manual/terakhir masih gagal:\n\n" + detail})
     prompt = qa_followup_prompt(r, issue, shown_log)
