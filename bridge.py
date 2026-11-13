@@ -219,6 +219,37 @@ akan DITOLAK Jembatan. QA dan merge tetap tahap terpisah."""
 MAX_PROMPT_CHARS = 125000
 
 
+def pick_context_files(tree, issue, changed=()):
+    """Choose relevant tracked text files; never silently trim file contents."""
+    source_ext = (".py", ".php", ".js", ".jsx", ".ts", ".tsx", ".rs",
+                  ".html", ".css", ".json", ".toml", ".yml", ".yaml",
+                  ".md", ".sh", ".sql", ".go", ".java", ".vue", ".svelte")
+    excluded = ("node_modules/", "vendor/", "dist/", "build/", "coverage/",
+                ".git/", ".next/", "__pycache__/")
+    candidates = [name for name in tree if name.endswith(source_ext) and
+                  not any(part in "/" + name for part in excluded) and
+                  not name.endswith((".lock", ".min.js", ".min.css")) and
+                  not any(word in name.lower() for word in
+                          ("secret", "credentials", "private_key", ".env"))]
+    text = ((issue.get("title") or "") + " " + (issue.get("body") or "")).lower()
+    stop = {"issue", "untuk", "yang", "dengan", "perbaiki", "tambahkan",
+            "error", "bug", "fitur", "menu", "dari", "pada", "test", "tests",
+            "fix", "the", "and", "from", "this", "after", "into"}
+    words = {word for word in re.findall(r"[a-z0-9_]{4,}", text)
+             if word not in stop}
+    changed = set(changed)
+    def weight(name):
+        low = name.lower()
+        score = 100 if low in text else 0
+        score += 60 if name in changed else 0
+        score += sum(5 for word in words if word in low)
+        score += 2 if name in ("README.md", "package.json", "composer.json",
+                               "pyproject.toml", "bridge.py", "index.html") else 0
+        return score
+    sorted_files = sorted(candidates, key=lambda name: (-weight(name), name.count("/"), name))
+    return sorted_files[:8]
+
+
 def build_prompt(r, n, branch=None, files=(), target=None):
     d = repo_dir(r)
     base = target or default_branch(d)
@@ -240,6 +271,18 @@ def build_prompt(r, n, branch=None, files=(), target=None):
         p += [f"## Diff utuh {ref} dibanding {base}",
               "```diff", git(d, "diff", rng), "```", ""]
     selected = list(dict.fromkeys(files))
+    auto_selected = not selected
+    if auto_selected:
+        changed = []
+        if branch:
+            changed = [line for line in git(d, "diff", "--name-only",
+                                             f"origin/{base}...origin/{ref}").splitlines()
+                       if line in tree]
+        selected = pick_context_files(tree, issue, changed)
+        if not selected:
+            raise Err("Tidak ada source file yang cocok untuk konteks. "
+                      "Isi kolom File konteks dengan path file relevan agar "
+                      "ChatGPT tidak menebak kode.", 409)
     if len(selected) > 20:
         raise Err("Maksimal 20 file konteks, pilih yang relevan.", 409)
     for file in selected:
@@ -254,7 +297,8 @@ def build_prompt(r, n, branch=None, files=(), target=None):
                   "satu permintaan. Pilih lebih sedikit file atau diff branch "
                   "lebih kecil. Jembatan tidak memotong konteks diam-diam.", 409)
     return {"prompt": result, "chars": len(result), "complete_context": True,
-            "files_included": selected, "branch": ref}
+            "files_included": selected, "auto_context": auto_selected,
+            "branch": ref}
 
 
 # ---------- terapkan patch dari ChatGPT ----------
