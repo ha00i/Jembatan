@@ -76,13 +76,25 @@ def gh(path, method="GET", body=None):
         raise Err(f"GitHub tidak terjangkau: {e.reason}", 502)
 
 
-def gh_pages(path, limit=5):
+def gh_pages(path, limit=5, require_complete=False):
+    """Read GitHub pages; optionally fail rather than silently lose later pages."""
+    if not isinstance(limit, int) or not 1 <= limit <= 100:
+        raise Err("Batas halaman GitHub tidak valid", 400)
     out = []
+    sep = '&' if '?' in path else '?'
     for p in range(1, limit + 1):
-        items = gh(f"{path}{'&' if '?' in path else '?'}per_page=100&page={p}")
-        out += items
+        items = gh(f"{path}{sep}per_page=100&page={p}")
+        if not isinstance(items, list):
+            raise Err("GitHub tidak mengembalikan daftar yang valid", 502)
+        out.extend(items)
         if len(items) < 100:
-            break
+            return out
+    if require_complete:
+        next_items = gh(f"{path}{sep}per_page=100&page={limit + 1}")
+        if next_items:
+            raise Err("Repository memiliki lebih dari " + str(limit * 100) +
+                      " entri GitHub. Pengambilan issue tidak dipotong diam-diam; "
+                      "gunakan penyaringan server atau tingkatkan batas yang didukung.", 409)
     return out
 
 
@@ -162,7 +174,11 @@ def overview(r):
     base = default_branch(d)
     brs = branches(d, base)
     in_base = nums(git(d, "log", f"origin/{base}", "-n", "3000", "--format=%s%n%b"))
-    issues = [i for i in gh_pages(f"/repos/{r}/issues?state=all&sort=updated", 3) if "pull_request" not in i]
+    # GitHub's issues endpoint includes pull requests. Read all pages before
+    # filtering them so 300 recent PRs cannot hide older issues.
+    issues = [i for i in gh_pages(f"/repos/{r}/issues?state=all&sort=updated",
+                                 limit=100, require_complete=True)
+              if "pull_request" not in i]
     linked, rows = set(), []
     for i in issues:
         n = i["number"]
@@ -188,7 +204,35 @@ def overview(r):
                          branches=[{k: b[k] for k in keep} for b in lb], merge_cmd=cmd))
     orphans = [{k: b[k] for k in ("name", "ahead", "behind", "merged", "date")}
                for b in brs if b["name"] not in linked]
-    return dict(repo=r, base=base, issues=rows, orphans=orphans)
+    return dict(repo=r, base=base, issues=rows, orphans=orphans,
+                issue_count=len(rows), open_count=sum(i["state"] == "open" for i in rows),
+                closed_count=sum(i["state"] == "closed" for i in rows))
+
+
+def issue_detail(r, number, comments_page=1):
+    """Fetch the full GitHub issue body and one explicit page of comments."""
+    repo_dir(r)  # Validate repo slug; do not require a local clone for reading.
+    try:
+        number = int(number)
+        comments_page = int(comments_page)
+    except (ValueError, TypeError) as exc:
+        raise Err("Nomor issue atau halaman komentar tidak valid", 400) from exc
+    if number < 1 or not 1 <= comments_page <= 1000:
+        raise Err("Nomor issue atau halaman komentar di luar batas", 400)
+    issue = gh(f"/repos/{r}/issues/{number}")
+    if issue.get("pull_request"):
+        raise Err("Nomor ini merupakan PR, bukan issue", 409)
+    total = int(issue.get("comments") or 0)
+    raw_comments = (gh(f"/repos/{r}/issues/{number}/comments?"
+                       f"per_page=100&page={comments_page}") if total else [])
+    comments = [{"id": c.get("id"), "author": (c.get("user") or {}).get("login", ""),
+                 "body": c.get("body") or "", "created_at": c.get("created_at"),
+                 "url": c.get("html_url")} for c in raw_comments]
+    return {"repo": r, "number": number, "title": issue.get("title", ""),
+            "state": issue.get("state", ""), "body": issue.get("body") or "",
+            "url": issue.get("html_url"), "comments": comments,
+            "comments_page": comments_page, "comments_total": total,
+            "has_more_comments": comments_page * 100 < total}
 
 
 # ---------- prompt untuk ChatGPT ----------
@@ -819,6 +863,8 @@ ROUTES = {
     ("GET", "/api/repos"): lambda q, b: list_repos(),
     ("POST", "/api/sync"): lambda q, b: sync(b["repos"]),
     ("GET", "/api/overview"): lambda q, b: overview(q["repo"]),
+    ("GET", "/api/issue/detail"): lambda q, b: issue_detail(
+        q["repo"], q["issue"], q.get("comments_page", 1)),
     ("GET", "/api/branches"): lambda q, b: branch_manager.inventory(sys.modules[__name__], q["repo"]),
     ("POST", "/api/branches/delete"): lambda q, b: branch_manager.delete_remote(
         sys.modules[__name__], b["repo"], b["branch"], b["sha"]),
