@@ -392,6 +392,16 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
 .prompt-part-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:9px}
 .prompt-part-actions button{min-height:42px}
 @media(max-width:540px){.prompt-part-actions button{flex:1 1 100%}}
+.issue-pagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin:16px 0;font-size:13px;color:var(--muted)}
+.issue-pagination .row{gap:8px}
+.issue-full-detail{border:1px solid var(--line);padding:16px;border-radius:11px;background:#f9fbff;min-width:0}
+.issue-full-detail[hidden]{display:none}
+.issue-full-detail h4{margin:8px 0;font-size:14px;color:var(--ink)}
+.issue-full-body,.issue-comment pre{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:none;overflow:visible;font-size:12px;line-height:1.65;margin:8px 0;padding:12px;background:var(--surface);color:var(--ink)}
+.issue-comment{margin:13px 0;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
+.issue-comment small{color:var(--muted)}
+.issue-comment pre{padding:6px;border:none}
+.issue-detail-actions button{min-height:42px}
 </style>
 </head>
 <body>
@@ -427,7 +437,7 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ST={none:['Belum ada pekerjaan',1],ready:['Commit ditemukan · perlu validasi QA',2],merged_open:['Terindikasi di main · issue masih terbuka',3],done:['Issue ditutup · verifikasi QA terpisah',4]};
-let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},prMerges:{},promptPacks:{},qaIssueNumber:null,filter:'all',issueQuery:'',selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0,page:'repos',showClosed:false,dockerCfg:null,dockerContainers:[]};
+let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},prMerges:{},promptPacks:{},qaIssueNumber:null,filter:'all',issueQuery:'',issuePage:0,selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0,page:'repos',showClosed:true,dockerCfg:null,dockerContainers:[]};
 $('#tok').value=tok;
 
 async function api(p,m='GET',b){
@@ -533,7 +543,7 @@ $('#repos').onclick=e=>{const b=e.target.closest('[data-open]');if(b)openRepo(b.
 
 async function openRepo(n){
   S.qaIssueNumber=Number(sessionStorage.getItem('jb-qa-issue-'+n))||null;
-  S.repo=n;S.filter='all';S.issueQuery='';S.data=null;S.branchData=null;S.branchError=null;S.branchLoading=true;S.branchQuery='';S.branchFilter='all';S.branchRequestId++;if($('#branch-delete-dialog').open)$('#branch-delete-dialog').close();drawRepos();
+  S.repo=n;S.filter='all';S.issueQuery='';S.issuePage=0;S.data=null;S.branchData=null;S.branchError=null;S.branchLoading=true;S.branchQuery='';S.branchFilter='all';S.branchRequestId++;if($('#branch-delete-dialog').open)$('#branch-delete-dialog').close();drawRepos();
   $('#view').innerHTML='<div class="welcome"><span class="eyebrow">Memuat repository</span><h2>Memeriksa issue dan branch...</h2><p>Data dibaca dari sinkronisasi lokal dan GitHub.</p></div>';
   const d=await run('Membaca branch dan issue',()=>api('/api/overview?repo='+encodeURIComponent(n)));
   if(d){S.data=d;drawMain();refreshBranches(n);if(S.page==='docker')refreshDocker()}
@@ -542,7 +552,8 @@ async function openRepo(n){
 function drawMain(){
   const d=S.data,cnt=k=>d.issues.filter(i=>i.status===k).length;
   const chips=[['all','Semua',d.issues.length],...Object.entries(ST).map(([k,v])=>[k,v[0].split(',')[0],cnt(k)])];
-  const list=d.issues.filter(i=>(S.showClosed||i.state==='open')&&(S.filter==='all'||i.status===S.filter)&&(!S.issueQuery||(i.title+' #'+i.number).toLowerCase().includes(S.issueQuery.toLowerCase())));
+  // All fetched issues count toward the summary; only 50 cards render per page.
+  // Closed issues are visible by default and can be hidden explicitly.
   $('#view').innerHTML=`
    <div class="head"><h2>${esc(d.repo)} <span class="mute">(utama: ${esc(d.base)})</span></h2>
     <div class="row"><button data-act="reload">Muat ulang</button><button data-act="open-docker">Docker & QA</button></div></div>
@@ -550,9 +561,73 @@ function drawMain(){
    <div class="metrics"><div class="metric"><span class="marker"></span><span class="value">${cnt('none')}</span><span class="meta">Belum ditangani</span></div><div class="metric review"><span class="marker"></span><span class="value">${cnt('ready')}</span><span class="meta">Perlu validasi</span></div><div class="metric merged"><span class="marker"></span><span class="value">${cnt('merged_open')}</span><span class="meta">Diduga sudah di main</span></div><div class="metric done"><span class="marker"></span><span class="value">${cnt('done')}</span><span class="meta">Issue ditutup</span></div></div>
    <div class="workbar"><h3>Daftar pekerjaan</h3><button data-act="toggle-closed">${S.showClosed?"Sembunyikan issue selesai":"Tampilkan issue selesai"}</button><label class="issue-search"><input id="issue-search" aria-label="Cari issue" placeholder="Cari judul atau nomor issue..." value="${esc(S.issueQuery)}"></label></div>
    <div class="chips">${chips.map(([k,l,c])=>`<button class="chip" data-chip="${k}" aria-pressed="${S.filter===k}">${esc(l)}: ${c}</button>`).join('')}</div>
-   <div id="work-items">${list.map(row).join('')||'<p class="mute">Tidak ada issue sesuai filter.</p>'}</div>
+   <div class="issue-pagination" aria-label="Navigasi halaman issue"><span id="issue-page-info" role="status"></span><div class="row"><button data-act="issue-prev">Sebelumnya</button><button data-act="issue-next">Berikutnya</button></div></div>
+   <div id="work-items"></div>
    <section id="branch-panel" class="branch-panel" aria-label="Manajemen branch"></section>`;
+  renderIssueList();
   drawBranchPanel();
+}
+function filteredIssues(){
+  return S.data.issues.filter(i=>(S.showClosed||i.state==='open')&&
+    (S.filter==='all'||i.status===S.filter)&&
+    (!S.issueQuery||(i.title+' #'+i.number).toLowerCase().includes(S.issueQuery.toLowerCase())));
+}
+function renderIssueList(){
+  if(!S.data)return;
+  const all=filteredIssues(),pageSize=50,totalPages=Math.max(1,Math.ceil(all.length/pageSize));
+  S.issuePage=Math.min(Math.max(0,S.issuePage||0),totalPages-1);
+  const offset=S.issuePage*pageSize,items=all.slice(offset,offset+pageSize);
+  const list=$('#work-items');if(list)list.innerHTML=items.map(row).join('')||
+    '<p class="mute">Tidak ada issue sesuai filter.</p>';
+  const info=$('#issue-page-info');if(info)info.textContent=all.length?
+    'Menampilkan '+(offset+1)+'–'+(offset+items.length)+' dari '+all.length+
+    ' issue · halaman '+(S.issuePage+1)+'/'+totalPages:
+    'Tidak ada issue yang cocok · total '+S.data.issues.length+' issue tersedia';
+  const prev=$('[data-act="issue-prev"]'),next=$('[data-act="issue-next"]');
+  if(prev)prev.disabled=S.issuePage===0;
+  if(next)next.disabled=S.issuePage>=totalPages-1;
+}
+async function loadIssueDetail(repo,number,box,page=1){
+  if(!box||S.repo!==repo)return;
+  const target=box.querySelector('[data-issue-content]'),button=box.querySelector('[data-act="issue-read"]');
+  if(!target||target.dataset.loading==='true')return;
+  target.hidden=false;target.dataset.loading='true';
+  if(button)button.disabled=true;
+  if(page===1)target.textContent='Memuat isi lengkap issue dari GitHub...';
+  try{
+    const data=await api('/api/issue/detail?repo='+encodeURIComponent(repo)+
+      '&issue='+number+'&comments_page='+page);
+    if(S.repo!==repo||!box.isConnected)return;
+    if(page===1){
+      target.innerHTML='<h4>Deskripsi issue lengkap</h4>'+
+        '<pre class="issue-full-body">'+esc(data.body||'(Deskripsi kosong)')+'</pre>'+
+        '<h4>Komentar ('+Number(data.comments_total||0)+')</h4>'+
+        '<div data-issue-comments></div>'+
+        '<button data-act="issue-more-comments" hidden>Muat komentar berikutnya</button>';
+      if(button)button.textContent='Muat ulang isi issue';
+    }
+    const comments=target.querySelector('[data-issue-comments]');
+    if(comments){
+      const rows=(data.comments||[]).map(c=>
+        '<article class="issue-comment"><strong>'+esc(c.author||'GitHub user')+
+        '</strong> <small>'+esc(c.created_at||'')+'</small>'+
+        '<pre>'+esc(c.body||'(Komentar kosong)')+'</pre></article>').join('');
+      comments.insertAdjacentHTML('beforeend',rows);
+    }
+    const more=target.querySelector('[data-act="issue-more-comments"]');
+    if(more){
+      more.hidden=!data.has_more_comments;
+      more.dataset.page=String(page+1);
+    }
+  }catch(error){
+    if(S.repo===repo&&box.isConnected){
+      if(page===1)target.textContent='Gagal memuat issue: '+error.message;
+      notify('Tidak dapat membaca isi issue: '+error.message,'error','GitHub');
+    }
+  }finally{
+    target.dataset.loading='false';
+    if(button)button.disabled=false;
+  }
 }
 function renderPromptPack(box,record){
   const find=x=>box.querySelector(x);
@@ -591,6 +666,8 @@ function row(i){
     <span class="bar" title="${esc(lbl)}">${[1,2,3,4].map(x=>`<i${x<=k?' class="on"':''}></i>`).join('')}</span><span class="l">${esc(lbl)}</span></summary>
    <div class="body"><div class="flow-hint"><span>Prompt lengkap</span><span>Terapkan patch</span><span>PR &amp; merge</span><span>QA manual terakhir</span></div>
     <p><a href="${esc(i.url)}" target="_blank" rel="noopener">Buka issue di GitHub</a></p>
+    <div class="issue-detail-actions"><button data-act="issue-read" type="button">Baca deskripsi lengkap dan komentar</button></div>
+    <div class="issue-full-detail" data-issue-content hidden></div>
     ${i.branches.length?`<ul>${i.branches.map(b=>`<li><code>${esc(b.name)}</code>: ${b.ahead} commit di depan, ${b.behind} tertinggal${b.merged?', sudah masuk':''} (${esc(b.date)})</li>`).join('')}</ul>`:'<p class="mute">Belum ada branch atau commit yang menyebut issue ini.</p>'}
     <p class="context-note">PR harus ditinjau sebelum merge. QA dijalankan manual setelah merge.</p>
     <div class="row"><select data-br aria-label="Branch konteks prompt"><option value="">Branch default (konteks prompt)</option>${opts}</select><input data-files placeholder="File konteks lengkap, pisahkan koma"></div>
@@ -765,9 +842,9 @@ $('#branch-delete-confirm').onclick=async()=>{
   }
 };
 
-$('#view').oninput=e=>{if(e.target.id==='branch-search'){S.branchQuery=e.target.value;const list=$('#branch-list');if(list)list.innerHTML=branchRows(branchFiltered());const num=$('#branch-visible-count');if(num)num.textContent=branchFiltered().length;return;}if(e.target.id==='issue-search'){S.issueQuery=e.target.value;const rows=S.data.issues.filter(i=>(S.showClosed||i.state==='open')&&(S.filter==='all'||i.status===S.filter)&&(!S.issueQuery||(i.title+' #'+i.number).toLowerCase().includes(S.issueQuery.toLowerCase())));$('#work-items').innerHTML=rows.map(row).join('')||'<p class="mute">Tidak ada issue sesuai filter.</p>';}};
+$('#view').oninput=e=>{if(e.target.id==='branch-search'){S.branchQuery=e.target.value;const list=$('#branch-list');if(list)list.innerHTML=branchRows(branchFiltered());const num=$('#branch-visible-count');if(num)num.textContent=branchFiltered().length;return;}if(e.target.id==='issue-search'){S.issueQuery=e.target.value;S.issuePage=0;renderIssueList();}};
 $('#view').onclick=async e=>{
-  const c=e.target.closest('[data-chip]');if(c){S.filter=c.dataset.chip;return drawMain()}
+  const c=e.target.closest('[data-chip]');if(c){S.filter=c.dataset.chip;S.issuePage=0;return drawMain()}
   const bf=e.target.closest('[data-branch-filter]');if(bf){S.branchFilter=bf.dataset.branchFilter;return drawBranchPanel()}
   const b=e.target.closest('[data-act]');if(!b)return;
   const act=b.dataset.act,box=b.closest('details'),n=box&&+box.dataset.n,q=s=>box.querySelector(s),repo=S.repo;
@@ -776,7 +853,16 @@ $('#view').onclick=async e=>{
   if(act==='branch-delete')return openBranchDelete(repo,b.dataset.branch);
   if(act==='reload')return openRepo(repo);
   if(act==='open-docker')return $('#nav-docker').click();
-  if(act==='toggle-closed'){S.showClosed=!S.showClosed;return drawMain()}
+  if(act==='toggle-closed'){S.showClosed=!S.showClosed;S.issuePage=0;return drawMain()}
+  if(act==='issue-prev'||act==='issue-next'){
+    S.issuePage+=act==='issue-next'?1:-1;
+    renderIssueList();
+    return;
+  }
+  if(act==='issue-read')return loadIssueDetail(repo,n,box,1);
+  if(act==='issue-more-comments'){
+    return loadIssueDetail(repo,n,box,Math.max(1,Number(b.dataset.page)||1));
+  }
   if(act==='copy'){
     const copied=await copy(q(b.dataset.sel));
     if(!copied)notify('Clipboard tidak tersedia. Pilih teks pada kotak prompt lalu salin manual.','warning','Salin gagal');
