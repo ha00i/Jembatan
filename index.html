@@ -521,6 +521,7 @@ function drawRepos(){
 $('#repos').onclick=e=>{const b=e.target.closest('[data-open]');if(b)openRepo(b.dataset.open)};
 
 async function openRepo(n){
+  S.qaIssueNumber=Number(sessionStorage.getItem('jb-qa-issue-'+n))||null;
   S.repo=n;S.filter='all';S.issueQuery='';S.data=null;S.branchData=null;S.branchError=null;S.branchLoading=true;S.branchQuery='';S.branchFilter='all';S.branchRequestId++;if($('#branch-delete-dialog').open)$('#branch-delete-dialog').close();drawRepos();
   $('#view').innerHTML='<div class="welcome"><span class="eyebrow">Memuat repository</span><h2>Memeriksa issue dan branch...</h2><p>Data dibaca dari sinkronisasi lokal dan GitHub.</p></div>';
   const d=await run('Membaca branch dan issue',()=>api('/api/overview?repo='+encodeURIComponent(n)));
@@ -749,6 +750,7 @@ $('#view').onclick=async e=>{
     if(!result.found)return notify('Belum ada PR untuk issue ini. Push patch terlebih dahulu.','warning');
     if(result.merged){
       S.qaIssueNumber=n;
+      sessionStorage.setItem('jb-qa-issue-'+repo,String(n));
       q('[data-pr-stage]').hidden=true;
       q('[data-qa-stage]').hidden=false;
       q('[data-qa-stage] p').textContent='QA adalah tahap terakhir. Pastikan checkout container QA benar-benar menguji '+result.base+
@@ -773,6 +775,10 @@ $('#view').onclick=async e=>{
       repo,issue:n,confirmed:true}));
     if(result?.state==='closed'){
       notify('Issue #'+n+' ditutup setelah konfirmasi QA PASS.','success');
+      if(Number(sessionStorage.getItem('jb-qa-issue-'+repo))===n){
+        sessionStorage.removeItem('jb-qa-issue-'+repo);
+        S.qaIssueNumber=null;
+      }
       await openRepo(repo);
     }
     return;
@@ -809,6 +815,7 @@ $('#view').onclick=async e=>{
         (result.merge_sha?' pada commit '+result.merge_sha.slice(0,12):'')+
         '. Jembatan tidak otomatis checkout branch dalam container QA.';
       S.qaIssueNumber=n;
+      sessionStorage.setItem('jb-qa-issue-'+repo,String(n));
       notify('PR merged ke '+result.branch+'. Selanjutnya jalankan QA manual.','success','Merge selesai');
       refreshBranches(repo);
     }
