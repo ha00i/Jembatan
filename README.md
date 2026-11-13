@@ -61,12 +61,18 @@ chat ChatGPT dan menempel balasannya kembali. Sisanya otomatis.
    konflik, proteksi branch, atau check yang belum lolos. Jembatan **tidak**
    otomatis menutup issue saat merge.
 7. **QA menjadi tahap manual terakhir.** Buka **Docker & QA**, pilih issue
-   terkait atau gunakan satu issue tracker QA, lalu Run QA. Jika opsi
-   **Laporkan QA gagal otomatis ke GitHub** dicentang, kegagalan akan
-   membuka ulang issue closed terkait atau memakai kembali satu issue QA,
-   mencantumkan log yang disanitasi dan prompt perbaikan yang bisa disalin.
-   Jika QA dilakukan di terminal, tempel log FAIL di kartu issue lalu klik
-   **QA FAIL — laporkan & buat prompt**.
+   hasil PR merged, lalu Run QA. Untuk QA final yang ditautkan ke issue, server
+   menolak QA jika PR belum merged. Container QA harus berada pada **branch
+   tujuan PR merged** dan SHA checkout harus cocok dengan tip GitHub.
+   Tes yang PASS pada branch/commit berbeda **bukan QA final PASS**.
+   Jika opsi **Laporkan QA gagal otomatis ke GitHub** dicentang, kegagalan tes
+   maupun gate branch/SHA akan membuka ulang issue closed terkait atau memakai
+   kembali satu tracker QA; log disanitasi dan prompt perbaikan siap disalin.
+   Prompt tindak lanjut mencoba melampirkan file source penuh yang relevan
+   dari snapshot Git yang SHA-nya terverifikasi. Bila source tidak sinkron atau
+   tidak lengkap, prompt **secara eksplisit menyatakan konteks yang kurang**,
+   bukan mengarang patch lengkap. Jika QA dijalankan di terminal, tempel log
+   FAIL di kartu issue lalu klik **QA FAIL — laporkan & buat prompt**.
 8. Jika QA **PASS** dan PR sudah merged, klik **QA PASS — Selesaikan issue**
    pada kartu issue untuk menutupnya. Ini konfirmasi QA manual, bukan bukti
    tes otomatis. Jika gagal, salin prompt tindak lanjut dari issue, ulangi
