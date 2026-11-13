@@ -896,6 +896,8 @@ ROUTES = {
         docker_control.connection_test),
     ("GET", "/api/docker/containers"): lambda q, b: docker_action(
         docker_control.containers),
+    ("GET", "/api/docker/compose-paths"): lambda q, b: docker_action(
+        docker_control.discover_compose_paths, q["repo"]),
     ("POST", "/api/docker/qa"): lambda q, b: legacy_qa(b["repo"]),
     ("POST", "/api/docker/qa/start"): lambda q, b: docker_action(
         qa_jobs.start, b["repo"], b.get("issue"), b.get("report_on_fail", False)),
