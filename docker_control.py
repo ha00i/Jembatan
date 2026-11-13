@@ -24,6 +24,16 @@ HOST_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9.-]{0,252}$")
 USER_RE = re.compile(r"^[a-z_][a-zA-Z0-9_.-]{0,63}$")
 REPO_RE = re.compile(r"^(?!\.{1,2}/)[a-zA-Z0-9_.-]+/(?!\.{1,2}$)[a-zA-Z0-9_.-]+$")
 QA_NAME_RE = re.compile(r"(^|[-_])qa([-_]|$)", re.I)
+BRANCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
+
+
+def valid_branch(value):
+    """Accept normal Git branch names while ruling out shell/ref-path hazards."""
+    return (isinstance(value, str) and bool(BRANCH_RE.fullmatch(value)) and
+            ".." not in value and "//" not in value and not value.endswith(("/", ".")) and
+            all(part and not part.startswith(".") and not part.endswith(".lock")
+                for part in value.split("/")))
+
 
 
 class DockerError(Exception):
@@ -110,6 +120,7 @@ def _app_settings(app, repo):
         "qa_profile": current.get("qa_profile", ""),
         "deploy_path": current.get("deploy_path", app.DEPLOY_MAP.get(repo, "")),
         "deploy_branch": current.get("deploy_branch", "main"),
+        "qa_branch_mode": current.get("qa_branch_mode", "active"),
     }
 
 
@@ -132,8 +143,11 @@ def save_app(app, body):
     profile = body.get("qa_profile", "")
     deploy_path = body.get("deploy_path", "")
     deploy_branch = body.get("deploy_branch", "main")
-    if deploy_branch not in ("main", "staging"):
-        raise DockerError("Branch deploy hanya boleh main atau staging")
+    qa_branch_mode = body.get("qa_branch_mode", "active")
+    if not valid_branch(deploy_branch):
+        raise DockerError("Branch deploy tidak valid")
+    if qa_branch_mode not in ("active", "default"):
+        raise DockerError("Sumber branch QA hanya boleh aktif atau default")
     if not isinstance(container, str) or (container and not NAME_RE.fullmatch(container)):
         raise DockerError("Nama container QA tidak valid")
     if container and not QA_NAME_RE.search(container):
@@ -150,7 +164,8 @@ def save_app(app, body):
         raise DockerError("Path deploy tidak valid")
     cfg = load(app)
     cfg["apps"][repo] = {"qa_container": container, "qa_profile": profile,
-                         "deploy_path": deploy_path, "deploy_branch": deploy_branch}
+                         "deploy_path": deploy_path, "deploy_branch": deploy_branch,
+                         "qa_branch_mode": qa_branch_mode}
     _atomic_config(_cfg_path(app), cfg)
     return _app_settings(app, repo)
 
@@ -252,11 +267,15 @@ def containers(app):
     return {"containers": result[:150]}
 
 
-def run_qa(app, repo, on_event=None):
+def run_qa(app, repo, on_event=None, branch_mode=None, required_branch=None):
     mapping = _app_settings(app, repo)
     name, profile = mapping["qa_container"], mapping["qa_profile"]
     if not name or profile not in QA_PROFILES or not QA_NAME_RE.search(name):
         raise DockerError("Atur container QA khusus dan profil tes dahulu", 409)
+    if branch_mode is not None and branch_mode not in ("active", "default"):
+        raise DockerError("Sumber branch QA tidak valid", 409)
+    if branch_mode == "default" and not valid_branch(required_branch):
+        raise DockerError("Branch default GitHub tidak valid", 409)
     # A name alone is not proof of isolation; do not use privileged/host-network targets.
     if on_event:
         on_event("stage", "Memeriksa keamanan container QA")
@@ -265,6 +284,31 @@ def run_qa(app, repo, on_event=None):
                     name, timeout=12).split("|")
     if len(proof) != 3 or proof[0] != "true" or proof[1] != "false" or proof[2] == "host":
         raise DockerError("Container QA tidak running atau konfigurasi isolasinya tidak memenuhi syarat", 409)
+    source_branch = None
+    if branch_mode is not None:
+        # QA never rewrites a live container checkout. Verify the already active
+        # branch and the expected repository before invoking a test command.
+        if on_event:
+            on_event("stage", "Memverifikasi branch QA")
+        try:
+            source_branch = _docker(app, "exec", name, "git", "branch",
+                                    "--show-current", timeout=12).strip()
+            origin = _docker(app, "exec", name, "git", "remote", "get-url",
+                             "origin", timeout=12).strip()
+        except DockerError as exc:
+            raise DockerError("Checkout Git dalam container QA tidak dapat dibaca; tes belum dijalankan", 409) from exc
+        if not valid_branch(source_branch):
+            raise DockerError("Branch aktif QA tidak valid atau HEAD detached; tes belum dijalankan", 409)
+        if origin.rstrip("/").removesuffix(".git") not in _repo_origin(repo):
+            raise DockerError("Origin Git container QA tidak cocok dengan repository pilihan", 409)
+        if branch_mode == "default" and source_branch != required_branch:
+            raise DockerError(
+                "QA default memerlukan checkout '" + required_branch +
+                "', tetapi container berada di '" + source_branch +
+                "'. Pindahkan checkout QA dahulu; Jembatan tidak mengubahnya otomatis.", 409)
+        if on_event:
+            on_event("output", "[Jembatan] Sumber QA: " + branch_mode +
+                     " · branch " + source_branch + "\n")
     # No input-defined shell/argv: fixed profile prevents remote command injection.
     command = QA_PROFILES[profile][1]
     if on_event:
@@ -297,16 +341,21 @@ def run_qa(app, repo, on_event=None):
                 after_sha = _docker(app, "exec", name, "git", "rev-parse", "--verify", "HEAD", timeout=12).strip()
                 after_dirty = _docker(app, "exec", name, "git", "status", "--porcelain",
                                       "--untracked-files=no", timeout=12).strip()
-                source_clean = after_sha == source_sha and not after_dirty
+                after_branch = (_docker(app, "exec", name, "git", "branch",
+                                "--show-current", timeout=12).strip()
+                                if branch_mode is not None else source_branch)
+                source_clean = (after_sha == source_sha and not after_dirty and
+                                after_branch == source_branch)
                 if not source_clean:
-                    source_reason = "Git SHA/tracked files berubah selama tes"
+                    source_reason = "Git SHA/branch/tracked files berubah selama tes"
             except DockerError:
                 source_clean = False
                 source_reason = "Git checkout QA tidak dapat diperiksa sesudah tes"
         return {"repo": repo, "container": name, "profile": profile,
                 "ok": True, "output": out[-8000:],
                 "source_sha": source_sha if source_clean else None,
-                "source_verified": source_clean, "source_reason": source_reason}
+                "source_verified": source_clean, "source_reason": source_reason,
+                "source_branch": source_branch}
     except DockerError as e:
         if e.code not in (502, 504):
             raise
@@ -355,7 +404,7 @@ def deploy(app, repo, confirm, branch=None, expected_sha=None):
     if not isinstance(repo, str) or not REPO_RE.fullmatch(repo) or confirm != repo:
         raise DockerError("Konfirmasi deploy harus nama repository persis", 409)
     item = _app_settings(app, repo)
-    if branch not in ("main", "staging") or item["deploy_branch"] != branch:
+    if not valid_branch(branch) or item["deploy_branch"] != branch:
         raise DockerError("Branch target deployment tidak sesuai pengaturan", 409)
     if not isinstance(expected_sha, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", expected_sha):
         raise DockerError("Bukti QA dan SHA target diperlukan sebelum deploy", 409)
@@ -400,7 +449,7 @@ def deploy(app, repo, confirm, branch=None, expected_sha=None):
         import shlex
         q = shlex.quote
         # No unreviewed shell command comes from the UI. Values are validated
-        # repo, main/staging, SHA and quote-escaped mapped absolute directory.
+        # repo, validated Git ref, SHA and quote-escaped mapped absolute directory.
         script = (
             "set -eu; cd -- " + q(path) + "; "
             "origin=$(git remote get-url origin); "
@@ -410,10 +459,10 @@ def deploy(app, repo, confirm, branch=None, expected_sha=None):
             "branch=$(git branch --show-current); "
             "[ \"$branch\" = " + q(branch) + " ] || { echo 'Branch deploy tidak cocok' >&2; exit 74; }; "
             "[ -z \"$(git status --porcelain)\" ] || { echo 'Folder deploy kotor' >&2; exit 75; }; "
-            "git fetch --no-tags origin refs/heads/" + branch + "; "
+            "git fetch --no-tags origin " + q("refs/heads/" + branch) + "; "
             "[ \"$(git rev-parse --verify FETCH_HEAD)\" = " + q(expected_sha) + " ] || "
             "{ echo 'Remote SHA berubah setelah QA' >&2; exit 76; }; "
-            "git pull --ff-only origin " + branch + "; "
+            "git pull --ff-only origin " + q(branch) + "; "
             "[ \"$(git rev-parse --verify HEAD)\" = " + q(expected_sha) + " ] || "
             "{ echo 'Pulled SHA tidak cocok' >&2; exit 77; }; "
             "docker compose up -d --build; "
