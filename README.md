@@ -38,7 +38,11 @@ chat ChatGPT dan menempel balasannya kembali. Sisanya otomatis.
    dari branch GitHub yang aktif/tersedia. Pilihan ini independen dari sumber
    branch QA maupun branch deploy.
 2. Klik **Buat prompt LENGKAP untuk ChatGPT**. Jembatan menyertakan seluruh
-   isi issue, daftar file dan file konteks yang dipilih, tanpa memotong diam-diam.
+   isi issue, daftar file, dan isi utuh file yang dipilih. Bila kolom file
+   kosong, Jembatan memilih hingga delapan source file relevan secara otomatis
+   berdasarkan judul/isi issue dan perubahan branch. Daftar file yang dipakai
+   terlihat di bawah tombol prompt; ChatGPT wajib meminta file tambahan jika
+   pilihan otomatis belum mencukupi.
    Jika melebihi batas **125.000 karakter**, pembuatan prompt ditolak dengan
    pesan jelas agar file konteks dikurangi, bukan dikirim sebagian.
 3. Tempel prompt ke ChatGPT. Jawaban wajib **STATUS: SELESAI**,
