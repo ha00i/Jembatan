@@ -388,6 +388,10 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
 .docker-panel .qa-report-toggle{display:flex;gap:11px;align-items:center;margin-top:19px;font-size:13px;font-weight:650;line-height:1.4;cursor:pointer}
 .docker-panel .qa-report-toggle input{width:18px;height:18px;min-height:18px;flex:0 0 18px;accent-color:var(--accent)}
 .flow-hint{flex-wrap:wrap}
+.prompt-part-progress{font-size:13px;line-height:1.5;font-weight:700;color:var(--accent);padding:10px 13px;border:1px solid var(--line);border-radius:9px;background:var(--accent-soft);overflow-wrap:anywhere}
+.prompt-part-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:9px}
+.prompt-part-actions button{min-height:42px}
+@media(max-width:540px){.prompt-part-actions button{flex:1 1 100%}}
 </style>
 </head>
 <body>
@@ -423,7 +427,7 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ST={none:['Belum ada pekerjaan',1],ready:['Commit ditemukan · perlu validasi QA',2],merged_open:['Terindikasi di main · issue masih terbuka',3],done:['Issue ditutup · verifikasi QA terpisah',4]};
-let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},prMerges:{},qaIssueNumber:null,filter:'all',issueQuery:'',selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0,page:'repos',showClosed:false,dockerCfg:null,dockerContainers:[]};
+let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},prMerges:{},promptPacks:{},qaIssueNumber:null,filter:'all',issueQuery:'',selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0,page:'repos',showClosed:false,dockerCfg:null,dockerContainers:[]};
 $('#tok').value=tok;
 
 async function api(p,m='GET',b){
@@ -543,6 +547,22 @@ function drawMain(){
    <section id="branch-panel" class="branch-panel" aria-label="Manajemen branch"></section>`;
   drawBranchPanel();
 }
+function renderPromptPack(box,record){
+  const find=x=>box.querySelector(x);
+  const multi=record.parts.length>1;
+  find('[data-prompt]').value=record.parts[record.index];
+  const status=find('[data-prompt-step]');
+  status.hidden=!multi;
+  if(multi)status.textContent='Bagian '+(record.index+1)+' dari '+record.parts.length+
+    ' · paket '+record.id+
+    (record.index===record.parts.length-1?
+      ' · BAGIAN TERAKHIR: sesudah ditempel, baru ChatGPT mengerjakan issue.':
+      ' · tempel bagian ini dahulu, lalu lanjutkan.');
+  const prev=find('[data-act="prompt-prev"]'),next=find('[data-act="prompt-next"]');
+  prev.hidden=!multi||record.index===0;
+  next.hidden=!multi||record.index===record.parts.length-1;
+  find('[data-prompt-guidance]').hidden=!multi;
+}
 function prTargetNames(){
   const base=S.data?.base||'main';
   return [...new Set([base,...(S.branchData?.branches||[]).map(b=>b.name)])];
@@ -569,7 +589,16 @@ function row(i){
     <div class="row"><select data-br aria-label="Branch konteks prompt"><option value="">Branch default (konteks prompt)</option>${opts}</select><input data-files placeholder="File konteks lengkap, pisahkan koma"></div>
     <label>Branch tujuan PR / merge<select data-pr-target aria-label="Branch tujuan PR">${prTargetNames().map(name=>'<option value="'+esc(name)+'">'+esc(name)+'</option>').join('')}</select></label>
     <div><button class="go" data-act="prompt">Buat prompt LENGKAP untuk ChatGPT</button></div>
-    <div data-p hidden><p class="docker-caption" data-prompt-files></p><textarea rows="8" readonly data-prompt></textarea><button data-act="copy" data-sel="[data-prompt]">Salin prompt</button></div>
+    <div data-p hidden><p class="docker-caption" data-prompt-files></p>
+      <p class="prompt-part-progress" data-prompt-step role="status" hidden></p>
+      <textarea rows="8" readonly data-prompt aria-label="Prompt ChatGPT bagian saat ini"></textarea>
+      <div class="prompt-part-actions">
+        <button data-act="prompt-prev" hidden>Bagian sebelumnya</button>
+        <button data-act="copy" data-sel="[data-prompt]">Salin bagian ini</button>
+        <button class="go" data-act="prompt-next" hidden>Bagian berikutnya &amp; salin</button>
+      </div>
+      <p class="docker-caption" data-prompt-guidance hidden>Tempel setiap bagian secara berurutan dalam SATU percakapan ChatGPT. Jangan meminta ChatGPT mulai mengerjakan sebelum bagian terakhir.</p>
+    </div>
     <label>Balasan ChatGPT<textarea rows="6" data-reply placeholder="Tempel balasan lengkap, termasuk blok diff"></textarea></label>
     <div><button class="go" data-act="apply">Terapkan patch</button></div>
     <pre data-res hidden></pre>
@@ -742,6 +771,15 @@ $('#view').onclick=async e=>{
   if(act==='open-docker')return $('#nav-docker').click();
   if(act==='toggle-closed'){S.showClosed=!S.showClosed;return drawMain()}
   if(act==='copy')return copy(q(b.dataset.sel));
+  if(act==='prompt-prev'||act==='prompt-next'){
+    const record=S.promptPacks[repo+'#'+n];
+    if(!record)return notify('Paket prompt tidak tersedia. Buat ulang prompt.','warning');
+    const step=act==='prompt-next'?1:-1;
+    record.index=Math.min(record.parts.length-1,Math.max(0,record.index+step));
+    renderPromptPack(box,record);
+    if(step>0)copy(q('[data-prompt]'));
+    return;
+  }
   if(act==='deploy')return $('#nav-docker').click();
   if(act==='pr-status'){
     const result=await run('Memeriksa PR issue',()=>api('/api/pr/status?repo='+
@@ -826,12 +864,22 @@ $('#view').onclick=async e=>{
     const target=q('[data-pr-target]').value;
     const r=await run('Menyusun prompt lengkap',()=>api('/api/prompt','POST',
       {repo,issue:n,branch:q('[data-br]').value,files,target}));
-    if(r){q('[data-p]').hidden=false;const t=q('[data-prompt]');t.value=r.prompt;
+    if(r){
+      const parts=Array.isArray(r.parts)&&r.parts.length?r.parts:[r.prompt].filter(Boolean);
+      if(!parts.length)return notify('Server tidak mengirim isi prompt.','error');
+      const record={parts,index:0,id:String(r.chars)+'-'+repo+'#'+n};
+      S.promptPacks[repo+'#'+n]=record;
+      q('[data-p]').hidden=false;
       q('[data-prompt-files]').textContent=(r.auto_context?'Konteks otomatis':'Konteks dipilih')+
-        ': '+(r.files_included||[]).join(', ');
-      copy(t);
-      note('Prompt lengkap ('+r.chars+' karakter, '+(r.files_included||[]).length+
-        ' file utuh) disalin. Balasan harus STATUS: SELESAI tanpa kekurangan.')}return;
+        ': '+(r.files_included||[]).join(', ')+'. Total '+r.chars+' karakter.'+
+        (parts.length>1?' Dibagi menjadi '+parts.length+' bagian tanpa menghapus isi.':'');
+      renderPromptPack(box,record);
+      copy(q('[data-prompt]'));
+      note(parts.length>1?
+        'Bagian 1/'+parts.length+' disalin. Tempel ke ChatGPT, lalu klik Bagian berikutnya & salin. Kerjakan hanya setelah bagian terakhir.':
+        'Prompt lengkap ('+r.chars+' karakter, '+(r.files_included||[]).length+
+        ' file utuh) disalin. Balasan harus STATUS: SELESAI tanpa kekurangan.');
+    }return;
   }
   if(act==='apply'){
     const target=q('[data-pr-target]').value;
