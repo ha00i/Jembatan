@@ -32,6 +32,28 @@ chat ChatGPT dan menempel balasannya kembali. Sisanya otomatis.
 3. Tanpa Docker: `export $(cat .env | xargs) && python3 bridge.py` lalu buka http://192.168.1.2:5111 (atau http://localhost:5111 dari server itu sendiri)
    Dengan Docker: `mkdir -p /srv/jembatan/repos && docker compose up -d --build`
 
+## Workspace layar penuh dan scroll bertingkat
+
+Pada layar desktop, dashboard Jembatan sekarang memakai tinggi viewport.
+**Halaman browser tidak perlu digulir hingga bawah untuk mencari issue.**
+Area scroll yang terpisah:
+- Sidebar repository di kiri (independen dari daftar issue).
+- Tab **Daftar issue** yang dapat digulir vertikal hingga 50 kartu per halaman.
+  Filter, pencarian, dan tombol halaman berada di atas panel dan tetap terlihat.
+- Tombol **Baca deskripsi lengkap dan komentar** mempunyai scroll tingkat ketiga
+  di dalam kartu issue.
+- Tab **Manajemen branch** memiliki scroll tersendiri dan mempertahankan
+  pemeriksaan status/proteksi serta tombol hapus yang telah ada.
+- **Docker & QA** memiliki panel kerja yang dapat digulir terpisah tanpa
+  menggeser sidebar. Pada layar kecil, tata letak kembali vertikal dengan
+  batas tinggi scroll yang sesuai untuk sentuhan.
+
+Gunakan **Fokus daftar** untuk menyembunyikan sementara kartu statistik dan
+memperbesar ruang baca. Klik **Tampilkan ringkasan** untuk mengembalikannya.
+Perpindahan tab Issue/Branch dan mode fokus tidak menghapus posisi scroll,
+filter, atau data issue yang sudah terlihat. Label status merge mengikuti
+branch utama repository (misalnya `dev`), bukan selalu `main`.
+
 ## Membaca seluruh issue GitHub
 
 - Menu **Repositories & Issues** sekarang mengambil seluruh halaman endpoint
