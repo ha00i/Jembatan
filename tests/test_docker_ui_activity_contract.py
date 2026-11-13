@@ -75,6 +75,9 @@ class DockerActivityUIContract(unittest.TestCase):
     def test_unsaved_branch_selections_do_not_run_operations(self):
         self.assertIn("Sumber branch QA belum disimpan", HTML)
         self.assertIn("Branch deploy belum disimpan", HTML)
+        self.assertIn("function dockerAppFormDirty()", HTML)
+        self.assertIn("Klik Simpan aplikasi sebelum menjalankan QA", HTML)
+        self.assertIn("Klik Simpan aplikasi sebelum deploy", HTML)
         self.assertIn("S.dockerCfg?.app?.qa_branch_mode||'active'", HTML)
         self.assertIn("S.dockerCfg?.app?.deploy_branch||'main'", HTML)
 
