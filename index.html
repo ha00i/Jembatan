@@ -404,6 +404,94 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
 .issue-comment small{color:var(--muted)}
 .issue-comment pre{padding:6px;border:none}
 .issue-detail-actions button{min-height:42px}
+
+/* Issue workspace: viewport-bound control room with three independent scrolls. */
+@media(min-width:761px){
+ html,body{height:100%;overflow:hidden}
+ .app{height:100dvh;min-height:0;overflow:hidden;grid-template-columns:264px minmax(0,1fr)}
+ .app>aside{position:relative;top:auto;height:100%;min-height:0;overflow:hidden;padding:17px 15px 15px;gap:13px}
+ .app>aside #repos{min-height:0;flex:1;overflow-y:auto;scrollbar-gutter:stable}
+ .app>main{display:flex;flex-direction:column;min-width:0;min-height:0;height:100dvh;overflow:hidden}
+ .app .topbar{flex:0 0 auto;min-height:56px;padding:10px clamp(16px,2.5vw,32px)}
+ .app .content{width:100%;max-width:none;min-width:0;min-height:0;flex:1;display:flex;flex-direction:column;overflow:hidden;margin:0;padding:14px clamp(16px,2.5vw,32px) 14px}
+ .app #note{flex:0 0 auto;min-height:0;margin:0 0 6px}
+ .app #note:empty{display:none}
+ .app .simple-nav{flex:0 0 auto;min-height:0;margin:0 0 14px;padding:0 0 11px}
+ .app .simple-nav button{min-height:37px;padding:7px 14px}
+ .app #view,.app #docker-view{min-width:0;min-height:0;flex:1;overflow-y:auto;scrollbar-gutter:stable;overscroll-behavior:contain}
+ .app #view.repo-workspace{display:flex;flex-direction:column;overflow:hidden}
+ .app #view.repo-workspace>.head,.app #view.repo-workspace>.context-note,.app #view.repo-workspace>.metrics,.app #view.repo-workspace>.workspace-switch{flex:0 0 auto}
+ .app #view.repo-workspace>.head{margin:0 0 9px}
+ .app #view.repo-workspace>.head h2{font-size:clamp(22px,2vw,28px)}
+ .app #view.repo-workspace>.head h2 span{margin-top:3px;font-size:12px}
+ .app #view.repo-workspace>.context-note{margin:0 0 11px;font-size:11px;line-height:1.4}
+ .app #view.repo-workspace>.metrics{gap:10px;margin:0 0 13px}
+ .app #view.repo-workspace .metric{padding:11px 15px;gap:6px;min-height:74px;box-shadow:none}
+ .app #view.repo-workspace .metric .value{font-size:26px}
+ .app #view.repo-workspace .metric .meta{font-size:11px}
+ .app #view.repo-workspace .metric .marker{width:25px;height:3px}
+ .app #view.repo-workspace .workspace-switch{margin:0 0 12px}
+ .app #view.repo-workspace .issue-workspace,.app #view.repo-workspace .branch-workspace{flex:1;min-height:0}
+ .app #view.repo-workspace .issue-workspace{display:flex;flex-direction:column}
+ .app #view.repo-workspace .branch-workspace{overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;overscroll-behavior:contain;padding:4px 6px 10px 0}
+ .app #view.repo-workspace .branch-workspace .branch-panel{margin-top:0}
+ .app #view.repo-workspace .issue-workspace>.workbar,.app #view.repo-workspace .issue-workspace>.chips,.app #view.repo-workspace .issue-workspace>.issue-pagination{flex:0 0 auto}
+ .app #view.repo-workspace .workbar{margin:0 0 9px;gap:9px}
+ .app #view.repo-workspace .workbar h3{font-size:15px}
+ .app #view.repo-workspace .workbar button{padding:8px 11px}
+ .app #view.repo-workspace .chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;min-height:0;gap:6px;margin:0 0 7px;padding:1px 0 6px}
+ .app #view.repo-workspace .chips .chip{white-space:nowrap;flex:0 0 auto;font-size:11px;padding:7px 10px}
+ .app #view.repo-workspace .issue-pagination{margin:0 0 8px;gap:8px;font-size:12px}
+ .app #view.repo-workspace .issue-pagination button{padding:6px 10px;font-size:12px}
+ .app #view.repo-workspace #work-items{flex:1;min-height:90px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-gutter:stable}
+}
+.workspace-switch{display:flex;align-items:center;gap:5px;min-width:0;padding:4px;border-radius:12px;border:1px solid #DCE5F3;background:#E9EFF9}
+.workspace-switch>button{border:1px solid transparent;background:transparent;color:#526886;box-shadow:none;border-radius:9px;padding:9px 14px;min-height:38px;font-size:13px;font-weight:750}
+.workspace-switch>button[aria-pressed=true]{background:white;color:#1C4C9B;border-color:#C8D8EE;box-shadow:0 2px 9px #183E810D}
+.workspace-switch .switch-count{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;background:#ECF2FC;border-radius:8px;font-size:11px;font-variant-numeric:tabular-nums}
+.workspace-scroll-help{font-size:11px;color:#697F9D;margin-left:auto;padding:0 10px}
+.issue-workspace[hidden],.branch-workspace[hidden]{display:none!important}
+.issue-workspace{min-width:0}
+.issue-workspace .chips{scrollbar-color:#B9C9E1 transparent}
+.issue-workspace #work-items{display:flex;flex-direction:column;align-items:stretch;gap:9px;padding:10px 10px 12px;border:1px solid #DCE6F3;border-radius:14px;background:#EDF2FA;scrollbar-color:#B0C1D9 transparent}
+.issue-workspace #work-items:focus-visible,.branch-workspace:focus-visible{outline:3px solid var(--focus);outline-offset:-3px}
+.issue-workspace #work-items details.is{flex:0 0 auto;box-shadow:0 1px 7px #1A315D0B;border-radius:10px;border-color:#E0E7F3;border-left-width:3px}
+.issue-workspace #work-items details.is[open]{box-shadow:0 8px 22px #152E5C13;border-color:#AFC6E8}
+.issue-workspace #work-items summary{grid-template-columns:60px minmax(0,1fr) auto;gap:5px 11px;padding:13px 15px;min-height:65px}
+.issue-workspace #work-items summary:hover{background:#F5F9FF}
+.issue-workspace #work-items summary .n{align-self:start;background:#F0F4FA;border-radius:6px;padding:3px 6px;color:#395981;font-size:11px}
+.issue-workspace #work-items summary .t{font-size:13px;line-height:1.4;letter-spacing:-.005em}
+.issue-workspace #work-items summary .l{font-size:11px}
+.issue-workspace #work-items .body{padding:17px;gap:13px}
+.issue-workspace .issue-pagination button{color:#355782;border-color:#CEDBEF}
+.issue-workspace .issue-pagination button:not(:disabled):hover{background:#ECF4FF}
+.issue-workspace .issue-search input{min-height:39px}
+.issue-workspace .issue-full-detail{max-height:min(48dvh,450px);overscroll-behavior-y:contain}
+@media(min-width:761px) and (max-height:760px){
+ .app .content{padding-top:10px;padding-bottom:10px}
+ .app .simple-nav{margin-bottom:9px;padding-bottom:8px}
+ .app #view.repo-workspace>.context-note{margin-bottom:7px}
+ .app #view.repo-workspace>.metrics{margin-bottom:8px}
+ .app #view.repo-workspace .metric{padding:9px 13px;min-height:65px}
+ .app #view.repo-workspace .metric .value{font-size:23px}
+ .app #view.repo-workspace .workspace-switch{margin-bottom:8px}
+ .app #view.repo-workspace .chips{margin-bottom:5px}
+}
+@media(max-width:760px){
+ .workspace-scroll-help{display:none}
+ .workspace-switch{flex-wrap:wrap}
+ .workspace-switch>button{flex:1 1 135px}
+ .issue-workspace #work-items{max-height:min(64dvh,610px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+ .branch-workspace{max-height:min(72dvh,690px);overflow-y:auto;overscroll-behavior:contain}
+ .issue-workspace .chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;padding-bottom:7px}
+ .issue-workspace .chips .chip{white-space:nowrap}
+}
+@media(max-width:540px){
+ .issue-workspace #work-items summary{grid-template-columns:46px minmax(0,1fr);padding:11px 12px}
+ .issue-workspace #work-items .body{padding:13px}
+ .issue-workspace #work-items{padding:7px}
+ .issue-workspace .issue-pagination{font-size:11px}
+}
 </style>
 </head>
 <body>
@@ -439,7 +527,7 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ST={none:['Belum ada pekerjaan',1],ready:['Commit ditemukan · perlu validasi QA',2],merged_open:['Terindikasi di main · issue masih terbuka',3],done:['Issue ditutup · verifikasi QA terpisah',4]};
-let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},prMerges:{},promptPacks:{},qaIssueNumber:null,filter:'all',issueQuery:'',issuePage:0,selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0,page:'repos',showClosed:true,dockerCfg:null,dockerContainers:[]};
+let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},prMerges:{},promptPacks:{},qaIssueNumber:null,filter:'all',issueQuery:'',issuePage:0,repoPanel:'issues',selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0,page:'repos',showClosed:true,dockerCfg:null,dockerContainers:[]};
 $('#tok').value=tok;
 
 async function api(p,m='GET',b){
@@ -545,7 +633,7 @@ $('#repos').onclick=e=>{const b=e.target.closest('[data-open]');if(b)openRepo(b.
 
 async function openRepo(n){
   S.qaIssueNumber=Number(sessionStorage.getItem('jb-qa-issue-'+n))||null;
-  S.repo=n;S.filter='all';S.issueQuery='';S.issuePage=0;S.data=null;S.branchData=null;S.branchError=null;S.branchLoading=true;S.branchQuery='';S.branchFilter='all';S.branchRequestId++;if($('#branch-delete-dialog').open)$('#branch-delete-dialog').close();drawRepos();
+  S.repo=n;S.filter='all';S.issueQuery='';S.issuePage=0;S.repoPanel='issues';S.data=null;S.branchData=null;S.branchError=null;S.branchLoading=true;S.branchQuery='';S.branchFilter='all';S.branchRequestId++;$('#view').classList.remove('repo-workspace');if($('#branch-delete-dialog').open)$('#branch-delete-dialog').close();drawRepos();
   $('#view').innerHTML='<div class="welcome"><span class="eyebrow">Memuat repository</span><h2>Memeriksa issue dan branch...</h2><p>Data dibaca dari sinkronisasi lokal dan GitHub.</p></div>';
   const d=await run('Membaca branch dan issue',()=>api('/api/overview?repo='+encodeURIComponent(n)));
   if(d){S.data=d;drawMain();refreshBranches(n);if(S.page==='docker')refreshDocker()}
@@ -556,18 +644,38 @@ function drawMain(){
   const chips=[['all','Semua',d.issues.length],...Object.entries(ST).map(([k,v])=>[k,v[0].split(',')[0],cnt(k)])];
   // All fetched issues count toward the summary; only 50 cards render per page.
   // Closed issues are visible by default and can be hidden explicitly.
+  $('#view').classList.add('repo-workspace');
   $('#view').innerHTML=`
    <div class="head"><h2>${esc(d.repo)} <span class="mute">(utama: ${esc(d.base)})</span></h2>
     <div class="row"><button data-act="reload">Muat ulang</button><button data-act="open-docker">Docker & QA</button></div></div>
-   <p class="context-note">Status adalah indikasi dari nama branch dan pesan commit, bukan bukti QA atau persetujuan merge.</p><pre id="deploy-out" hidden></pre>
+   <p class="context-note">Status diperoleh dari riwayat Git dan GitHub; bukan bukti QA atau persetujuan merge.</p><pre id="deploy-out" hidden></pre>
    <div class="metrics"><div class="metric"><span class="marker"></span><span class="value">${cnt('none')}</span><span class="meta">Belum ditangani</span></div><div class="metric review"><span class="marker"></span><span class="value">${cnt('ready')}</span><span class="meta">Perlu validasi</span></div><div class="metric merged"><span class="marker"></span><span class="value">${cnt('merged_open')}</span><span class="meta">Diduga sudah di main</span></div><div class="metric done"><span class="marker"></span><span class="value">${cnt('done')}</span><span class="meta">Issue ditutup</span></div></div>
-   <div class="workbar"><h3>Daftar pekerjaan</h3><button data-act="toggle-closed">${S.showClosed?"Sembunyikan issue selesai":"Tampilkan issue selesai"}</button><label class="issue-search"><input id="issue-search" aria-label="Cari issue" placeholder="Cari judul atau nomor issue..." value="${esc(S.issueQuery)}"></label></div>
-   <div class="chips">${chips.map(([k,l,c])=>`<button class="chip" data-chip="${k}" aria-pressed="${S.filter===k}">${esc(l)}: ${c}</button>`).join('')}</div>
-   <div class="issue-pagination" aria-label="Navigasi halaman issue"><span id="issue-page-info" role="status"></span><div class="row"><button data-act="issue-prev">Sebelumnya</button><button data-act="issue-next">Berikutnya</button></div></div>
-   <div id="work-items"></div>
-   <section id="branch-panel" class="branch-panel" aria-label="Manajemen branch"></section>`;
+   <div class="workspace-switch" role="group" aria-label="Panel repository">
+     <button type="button" data-act="workspace-issues" aria-pressed="${S.repoPanel!=='branches'}">Daftar issue <span class="switch-count">${d.issues.length}</span></button>
+     <button type="button" data-act="workspace-branches" aria-pressed="${S.repoPanel==='branches'}">Manajemen branch <span class="switch-count">${S.branchData?.branches?.length??'…'}</span></button>
+     <span class="workspace-scroll-help">Gulir di dalam panel, tanpa pindah halaman</span>
+   </div>
+   <section id="issue-pane" class="issue-workspace" aria-label="Daftar dan filter issue">
+     <div class="workbar"><h3>Daftar pekerjaan</h3><button data-act="toggle-closed">${S.showClosed?"Sembunyikan issue selesai":"Tampilkan issue selesai"}</button><label class="issue-search"><input id="issue-search" aria-label="Cari issue" placeholder="Cari judul atau nomor issue..." value="${esc(S.issueQuery)}"></label></div>
+     <div class="chips" aria-label="Filter status issue">${chips.map(([k,l,c])=>`<button class="chip" data-chip="${k}" aria-pressed="${S.filter===k}">${esc(l)}: ${c}</button>`).join('')}</div>
+     <div class="issue-pagination" aria-label="Navigasi halaman issue"><span id="issue-page-info" role="status"></span><div class="row"><button data-act="issue-prev">Sebelumnya</button><button data-act="issue-next">Berikutnya</button></div></div>
+     <div id="work-items" role="region" aria-label="Daftar issue, gulir di dalam panel" tabindex="0"></div>
+   </section>
+   <section id="branch-pane" class="branch-workspace" aria-label="Manajemen branch" hidden>
+     <section id="branch-panel" class="branch-panel"></section>
+   </section>`;
   renderIssueList();
   drawBranchPanel();
+  setRepoPanel(S.repoPanel);
+}
+function setRepoPanel(which){
+  S.repoPanel=which==='branches'?'branches':'issues';
+  const issues=$('#issue-pane'),branches=$('#branch-pane');
+  if(issues)issues.hidden=S.repoPanel!=='issues';
+  if(branches)branches.hidden=S.repoPanel!=='branches';
+  const issuesButton=$('[data-act="workspace-issues"]'),branchesButton=$('[data-act="workspace-branches"]');
+  if(issuesButton)issuesButton.setAttribute('aria-pressed',String(S.repoPanel==='issues'));
+  if(branchesButton)branchesButton.setAttribute('aria-pressed',String(S.repoPanel==='branches'));
 }
 function filteredIssues(){
   return S.data.issues.filter(i=>(S.showClosed||i.state==='open')&&
@@ -588,6 +696,7 @@ function renderIssueList(){
   const prev=$('[data-act="issue-prev"]'),next=$('[data-act="issue-next"]');
   if(prev)prev.disabled=S.issuePage===0;
   if(next)next.disabled=S.issuePage>=totalPages-1;
+  if(list)list.scrollTop=0;
 }
 async function loadIssueDetail(repo,number,box,page=1){
   if(!box||S.repo!==repo)return;
@@ -855,6 +964,10 @@ $('#view').onclick=async e=>{
   if(act==='branch-delete')return openBranchDelete(repo,b.dataset.branch);
   if(act==='reload')return openRepo(repo);
   if(act==='open-docker')return $('#nav-docker').click();
+  if(act==='workspace-issues'||act==='workspace-branches'){
+    setRepoPanel(act==='workspace-branches'?'branches':'issues');
+    return;
+  }
   if(act==='toggle-closed'){S.showClosed=!S.showClosed;S.issuePage=0;return drawMain()}
   if(act==='issue-prev'||act==='issue-next'){
     S.issuePage+=act==='issue-next'?1:-1;
