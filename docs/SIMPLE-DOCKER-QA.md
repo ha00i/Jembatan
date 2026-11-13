@@ -1,39 +1,45 @@
 # Jembatan — Docker & QA sederhana
 
-## Panduan deployment terkini (menggantikan alur deploy lama di bawah)
+## QA branch aktif/default dan branch deploy terpisah (panduan terkini)
 
-**Alur nyata:** pilih repo → atur `deploy_branch=main` atau `staging` →
-pilih QA container Git checkout yang sama → jalankan QA → periksa kesiapan →
-konfirmasi repo → Git fetch/pull --ff-only → verifikasi SHA setelah pull →
-Compose build/up → Compose healthcheck.
+**Pengaturan satu kali per repository:** pilih container QA, preset pengujian,
+**Sumber branch QA = Aktif atau Default GitHub**, lalu pilih **Branch Deploy**
+dari daftar nyata branch GitHub. Tekan **Simpan aplikasi**. Kedua pilihan
+tersebut tidak saling mengubah.
 
-**Gate server-side wajib:**
-1. GitHub branch target mengembalikan commit SHA valid.
-2. QA job terakhir PASS untuk repo + container + profil yang sama, dengan
-   `git rev-parse HEAD` dan tracked files clean pada container QA sebelum
-   dan setelah tes, serta SHA sama dengan commit branch target saat QA.
-3. SHA GitHub branch target saat deploy sama dengan SHA yang diuji.
-4. Folder deployment punya Git origin yang cocok, tidak dirty, berada di
-   branch target, dan HEAD setelah git pull persis sama dengan SHA QA.
-5. Docker Compose hanya berjalan setelah semua gate lulus.
+- **Aktif:** QA memakai checkout Git yang saat itu aktif di dalam container QA.
+  Jembatan memeriksa nama branch, remote origin, kebersihan tracked files, serta
+  SHA sebelum/sesudah tes. Branch tersebut harus ada di repository GitHub yang
+  dipilih, dan SHA harus sama dengan tip branch GitHub untuk dianggap terverifikasi.
+- **Default:** QA menanyakan `default_branch` dari GitHub terlebih dahulu.
+  Jika checkout QA tidak berada pada branch default tersebut, tes **ditolak**
+  dengan alasan jelas. Jembatan sengaja tidak menjalankan `git switch`
+  otomatis pada container yang mungkin sedang dipakai proses lain.
+- **Deploy:** branch target boleh `main`, `staging`, `release/v2` atau branch
+  GitHub lain yang tersedia. Deployment tetap memerlukan folder Compose khusus
+  dengan branch aktif dan remote Git yang sesuai; tidak mengubah checkout
+  production diam-diam.
+- **Bukti QA lintas branch:** jika QA pada branch A PASS dengan commit SHA `X`,
+  branch deploy B hanya bisa dipakai bila HEAD GitHub B juga `X`. Jika berbeda,
+  deploy **ditahan**, bukan otomatis men-deploy kode yang belum diuji.
+- **Periksa kesiapan:** baca branch, SHA target, hasil QA dan alasan penolakan.
+  Saat tombol Deploy ditekan, gate tersebut diperiksa ulang sebelum pull,
+  build, dan healthcheck.
+- **Keamanan:** tidak menggunakan command shell arbitrer dari browser. QA hanya
+  pada container QA yang terdaftar. Pemisahan data/volume QA dari production
+  tetap tanggung jawab konfigurasi operator. Job QA hanya tersimpan di memori
+  hingga backend restart.
 
-**Bila QA PASS tetapi tidak ada Git checkout di container:** readiness menolak
-deploy. Ini sengaja, karena hasil tes saja tidak membuktikan kode yang diuji.
-Gunakan QA environment yang menyimpan Git checkout untuk commit tersebut.
-QA bisa dibangun dari branch target, tetapi pastikan tidak ada akses ke database
-production atau volume production. QA/production masih satu daemon Docker; ini
-tidak setara sandbox VM untuk kode tidak tepercaya.
+**Alur:** pilih repository → sumber QA → branch deploy → Simpan aplikasi →
+Run QA → periksa kesiapan → konfirmasi deploy → verifikasi SHA GitHub →
+`git fetch` dan `git pull --ff-only` → cocokkan HEAD → Compose build →
+healthcheck. Jika default branch GitHub berbeda dari checkout QA, perbaiki
+checkout QA secara sadar sebelum Run QA.
 
-**Healthcheck:** status `healthy` hanya jika semua service Compose yang
-terdeteksi menyatakan healthy. Service yang tidak punya healthcheck dilaporkan
-`unverified`; bukan kegagalan deployment, tetapi operator harus memastikan
-kesehatan aplikasi manual. Status `unhealthy` berarti deploy harus diperiksa.
-Tidak ada rollback otomatis.
+**Catatan:** Bagian dokumentasi historis di bawah mungkin menyebut QA sinkron,
+branch `main/staging` saja, atau konfirmasi dengan pengetikan. Untuk
+perilaku terkini, gunakan bagian ini dan kontrak API pada kode sumber.
 
-**API terbaru:** `GET /api/deploy/readiness?repo=owner/name` adalah preflight
-read-only; `POST /api/deploy` memverifikasi ulang secara server-side.
-`POST /api/docker/app` kini menyimpan `deploy_branch` (`main`/`staging`).
-Bukti QA job di backend in-memory: restart Jembatan menghapus gate PASS.
 
 ---
 
