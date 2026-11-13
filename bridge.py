@@ -332,22 +332,71 @@ def apply_patch(r, n, reply, branch=None):
     return res
 
 
-def push(r, branch, n):
+def push(r, branch, n, target=None):
+    """Push the issue branch and create/reuse a PR targeting operator-selected base."""
     d = repo_dir(r)
-    if not need_branch(branch).startswith("bridge/"):
-        raise Err("Bot hanya boleh push ke branch bridge/*.")
+    issue_branch = f"bridge/issue-{int(n)}"
+    if not docker_control.valid_branch(branch) or branch != issue_branch:
+        raise Err("PR hanya boleh memakai branch issue yang tetap", 409)
+    base = target or default_branch(d)
+    if not docker_control.valid_branch(base) or base == branch:
+        raise Err("Branch tujuan PR tidak valid", 409)
+    gh(f"/repos/{r}/branches/{urlquote(base, safe='')}")  # must really exist
     git(d, "push", "-u", "origin", branch, net=True, timeout=300)
     try:
         existing = gh_pages(f"/repos/{r}/pulls?state=open&head={r.split('/')[0]}:{branch}", 1)
         for item in existing:
-            if item.get("head", {}).get("ref") == branch:
-                return {"pushed": True, "pr": item["html_url"], "reused": True}
+            if item.get("head", {}).get("ref") != branch:
+                continue
+            pr = item
+            if (pr.get("base") or {}).get("ref") != base:
+                pr = gh(f"/repos/{r}/pulls/{pr['number']}", "PATCH", {"base": base})
+            return {"pushed": True, "pr": pr["html_url"], "number": pr["number"],
+                    "base": base, "head_sha": pr["head"]["sha"], "reused": True,
+                    "qa_required": True}
         pr = gh(f"/repos/{r}/pulls", "POST", {
-            "title": f"Kerjakan #{int(n)}", "head": branch, "base": default_branch(d),
-            "body": f"Closes #{int(n)}\n\nDibuat lewat Jembatan (patch dari ChatGPT)."})
-        return {"pushed": True, "pr": pr["html_url"], "reused": False}
-    except Err as e:
-        return {"pushed": True, "pr": None, "error": str(e)}
+            "title": f"Kerjakan #{int(n)}", "head": branch, "base": base,
+            # Never auto-close an issue on merge: QA is still the last gate.
+            "body": f"Refs #{int(n)}\n\nPatch dari ChatGPT melalui Jembatan. "
+                    "Issue tetap menunggu QA manual setelah merge."})
+        return {"pushed": True, "pr": pr["html_url"], "number": pr["number"],
+                "base": base, "head_sha": pr["head"]["sha"], "reused": False,
+                "qa_required": True}
+    except Err as exc:
+        return {"pushed": True, "pr": None, "error": str(exc)}
+
+
+def merge_issue_pr(r, issue_number, pr_number, base, expected_sha):
+    """An explicit, SHA-locked operator merge; manual QA always follows."""
+    repo_dir(r)
+    n = int(issue_number)
+    pr_number = int(pr_number)
+    if n < 1 or pr_number < 1 or not docker_control.valid_branch(base):
+        raise Err("PR atau branch tujuan tidak valid", 409)
+    if not isinstance(expected_sha, str) or not re.fullmatch(r"[a-fA-F0-9]{40}", expected_sha):
+        raise Err("SHA PR untuk konfirmasi merge tidak valid", 409)
+    pr = gh(f"/repos/{r}/pulls/{pr_number}")
+    if pr.get("state") != "open" or pr.get("merged_at"):
+        raise Err("PR tidak terbuka; merge dibatalkan", 409)
+    if (pr.get("head") or {}).get("ref") != f"bridge/issue-{n}":
+        raise Err("PR tidak cocok dengan branch issue", 409)
+    if (pr.get("base") or {}).get("ref") != base:
+        raise Err("Branch tujuan PR berubah. Muat ulang PR sebelum merge.", 409)
+    if (pr.get("head") or {}).get("sha") != expected_sha:
+        raise Err("SHA PR berubah sesudah persetujuan. Periksa ulang sebelum merge.", 409)
+    head_repo = ((pr.get("head") or {}).get("repo") or {}).get("full_name")
+    if head_repo and head_repo.lower() != r.lower():
+        raise Err("PR berasal dari repository lain", 409)
+    if pr.get("mergeable") is False:
+        raise Err("PR memiliki konflik dan belum dapat di-merge", 409)
+    result = gh(f"/repos/{r}/pulls/{pr_number}/merge", "PUT", {
+        "sha": expected_sha, "merge_method": "squash",
+        "commit_title": f"Kerjakan #{n} — merge ke {base}"})
+    if result.get("merged") is not True:
+        raise Err("GitHub tidak mengonfirmasi merge; periksa PR langsung", 502)
+    return {"merged": True, "issue": n, "pr_number": pr_number,
+            "branch": base, "merge_sha": result.get("sha"),
+            "qa_required": True, "next": "Jalankan QA secara manual; issue belum dianggap selesai."}
 
 
 # ---------- Docker: explicit mapping, fixed QA commands, operator-approved deploy ----------
@@ -465,7 +514,9 @@ ROUTES = {
                                                        b.get("files") or []),
     ("POST", "/api/apply"): lambda q, b: apply_patch(b["repo"], int(b["issue"]), b["reply"],
                                                      b.get("branch") or None),
-    ("POST", "/api/push"): lambda q, b: push(b["repo"], b["branch"], int(b["issue"])),
+    ("POST", "/api/push"): lambda q, b: push(b["repo"], b["branch"], int(b["issue"]), b.get("target")),
+    ("POST", "/api/pr/merge"): lambda q, b: merge_issue_pr(
+        b["repo"], b["issue"], b["pr_number"], b["base"], b["head_sha"]),
     ("GET", "/api/docker/settings"): lambda q, b: docker_action(
         docker_control.public_settings, q.get("repo")),
     ("POST", "/api/docker/settings"): lambda q, b: docker_action(
