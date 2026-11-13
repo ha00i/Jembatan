@@ -66,6 +66,10 @@ class DashboardNestedScrollContract(unittest.TestCase):
         self.assertIn("max-height:min(72dvh,690px);overflow-y:auto", HTML)
         self.assertIn("-webkit-overflow-scrolling:touch", HTML)
 
+    def test_merge_summary_follows_selected_repository_default_branch(self):
+        self.assertIn("Diduga masuk ${esc(d.base)}", HTML)
+        self.assertNotIn("Diduga sudah di main", HTML)
+
     def test_qa_and_pr_actions_are_not_removed_by_rebranding(self):
         self.assertIn('data-act="prompt"', HTML)
         self.assertIn('data-act="push"', HTML)
