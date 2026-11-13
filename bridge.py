@@ -456,22 +456,78 @@ QA_TRACKER = "<!-- jembatan:qa-tracker -->"
 QA_REPORT_LOCK = threading.Lock()
 
 
-def qa_followup_prompt(r, issue, log):
+def qa_followup_source_context(r, issue, log, branch=None, budget=75000):
+    """Attach relevant full source files; disclose missing/unverifiable context.
+
+    QA logs/issue text can name files but never supply executable commands.
+    Only paths present in Git's tracked tree are eligible for git show.
+    """
+    notice = []
+    entries = []
+    try:
+        d = repo_dir(r)
+        ref = branch or default_branch(d)
+        if not docker_control.valid_branch(ref):
+            raise Err("Branch QA tidak valid", 409)
+        head = git(d, "rev-parse", "--verify", "-q",
+                   f"refs/remotes/origin/{ref}", check=False).strip()
+        if not re.fullmatch(r"[a-fA-F0-9]{40}", head):
+            raise Err("Branch QA tidak tersedia di clone; sinkronkan repo", 409)
+        remote = gh(f"/repos/{r}/branches/{urlquote(ref, safe='')}")
+        remote_head = (remote.get("commit") or {}).get("sha")
+        if head != remote_head:
+            raise Err("Clone belum sinkron dengan branch GitHub " + ref, 409)
+        files = git(d, "ls-tree", "-r", "--name-only", f"origin/{ref}").splitlines()
+        evidence = (issue.get("body") or "") + "\n" + log
+        candidates = [name for name in files if len(name) <= 260 and
+                      (name in evidence or name.rsplit("/", 1)[-1] in evidence)]
+        candidates.sort(key=lambda name: (name not in log,
+                         name.rsplit("/", 1)[-1] not in log, len(name), name))
+        remaining = max(0, min(budget, MAX_PROMPT_CHARS - len(evidence) - len(FORMAT) - 3000))
+        for name in candidates:
+            if len(entries) >= 10:
+                notice.append("File relevan lain belum disertakan: " +
+                              ", ".join(candidates[len(entries):][:12]))
+                break
+            content = git(d, "show", f"origin/{ref}:{name}")
+            record = "## SOURCE UTUH " + name + "\n~~~~text\n" + content + "\n~~~~\n"
+            if len(record) > remaining:
+                notice.append("Source tidak dimasukkan karena melewati batas prompt: " + name)
+                continue
+            entries.append(record)
+            remaining -= len(record)
+        if not entries:
+            notice.append("Tidak ada source relevan yang dapat dipastikan dari nama file di log/issue.")
+        return ("Branch sumber: " + ref + " · SHA: " + head + "\n" +
+                "\n".join(entries), notice)
+    except (Err, OSError, ValueError) as exc:
+        return ("Belum ada snapshot source yang tervalidasi.", [
+            "Konteks source belum tersedia: " + str(exc)[:240]
+        ])
+
+
+def qa_followup_prompt(r, issue, log, branch=None):
     title = issue.get("title") or "Kegagalan QA"
     body = issue.get("body") or "(kosong)"
+    context, missing = qa_followup_source_context(r, issue, log, branch)
     payload = [
-        "SELESAIKAN SEMUA masalah, jangan kirim solusi sebagian.",
+        "SELESAIKAN SEMUA error dan kriteria issue. Jangan kirim patch sebagian.",
+        "Ini satu siklus perbaikan pada branch kerja issue yang sama; jangan membuat branch/issue duplikat.",
         f"Repository: {r}. Issue #{issue['number']}: {title}",
-        "Tindaklanjuti keseluruhan issue dan error QA berikut sampai selesai.",
-        "Jangan menyatakan PASS atau mengarang hasil uji yang tidak dijalankan.",
-        "Jika butuh source tambahan: hanya balas BUTUH FILE: path1, path2.",
-        "", "## Isi issue lengkap", body,
-        "", "## Log QA (disanitasi; bagian terakhir bila log panjang)",
-        "~~~~text", log, "~~~~", "", FORMAT,
+        "Jangan menyatakan tes PASS jika tidak ada bukti pengujian.",
+        "Jika sumber yang dibutuhkan tidak tersedia, balas hanya BUTUH FILE: path1, path2.",
+        "Jangan menebak atau mengganti file yang tidak diberikan sumber lengkapnya.",
+        "", "## Isi issue utuh", body,
+        "", "## Log QA (disanitasi; mungkin hanya bagian akhir bila terlalu panjang)",
+        "~~~~text", log, "~~~~",
+        "", "## Source code relevan dan status konteks", context,
+        "", "## Batas konteks yang harus dipenuhi sebelum patch",
+        *("- " + item for item in missing),
+        "", FORMAT,
     ]
     prompt = "\n".join(payload)
     if len(prompt) > MAX_PROMPT_CHARS:
-        raise Err("Prompt tindak lanjut QA terlalu besar; pecah laporan issue.", 409)
+        raise Err("Prompt perbaikan QA melebihi batas aman. Periksa ukuran log dan issue.", 409)
     return prompt
 
 
@@ -537,7 +593,7 @@ def _report_qa_failure_unlocked(r, issue_number=None, log="", branch=None):
                 not any(fingerprint in (c.get("body") or "") for c in comments)):
             gh(f"/repos/{r}/issues/{issue['number']}/comments", "POST", {
                 "body": "QA manual/terakhir masih gagal:\n\n" + detail})
-    prompt = qa_followup_prompt(r, issue, shown_log)
+    prompt = qa_followup_prompt(r, issue, shown_log, branch)
     return {"issue": issue["number"], "url": issue.get("html_url", ""),
             "created": created, "reopened": reopened,
             "prompt": prompt, "chars": len(prompt),
