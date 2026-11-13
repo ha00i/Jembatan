@@ -399,6 +399,44 @@ def merge_issue_pr(r, issue_number, pr_number, base, expected_sha):
             "qa_required": True, "next": "Jalankan QA secara manual; issue belum dianggap selesai."}
 
 
+def issue_pr_status(r, issue_number):
+    """Recover an open/merged PR after reloading the issue card."""
+    repo_dir(r)
+    n = int(issue_number)
+    if n < 1:
+        raise Err("Nomor issue harus positif", 409)
+    branch = f"bridge/issue-{n}"
+    values = gh_pages(f"/repos/{r}/pulls?state=all&head={r.split('/')[0]}:{branch}"
+                      "&sort=updated&direction=desc", 3)
+    prs = [p for p in values if (p.get("head") or {}).get("ref") == branch]
+    if not prs:
+        return {"found": False, "issue": n}
+    pr = next((p for p in prs if p.get("state") == "open"),
+              next((p for p in prs if p.get("merged_at")), prs[0]))
+    return {"found": True, "issue": n, "number": pr["number"],
+            "url": pr.get("html_url"), "base": (pr.get("base") or {}).get("ref"),
+            "head_sha": (pr.get("head") or {}).get("sha"),
+            "state": pr.get("state"), "merged": bool(pr.get("merged_at"))}
+
+
+def complete_qa_issue(r, issue_number, confirmed):
+    """The operator, not the merge event, explicitly marks manual QA PASS."""
+    repo_dir(r)
+    n = int(issue_number)
+    if n < 1 or confirmed is not True:
+        raise Err("Konfirmasi manual QA PASS dibutuhkan", 409)
+    issue = gh(f"/repos/{r}/issues/{n}")
+    if issue.get("pull_request"):
+        raise Err("Nomor yang dipilih adalah PR, bukan issue", 409)
+    if issue.get("state") != "closed":
+        gh(f"/repos/{r}/issues/{n}/comments", "POST", {
+            "body": "QA MANUAL PASS — operator Jembatan menyatakan tes telah selesai. "
+                    "Status ini berasal dari konfirmasi pengguna, bukan klaim QA otomatis."})
+        issue = gh(f"/repos/{r}/issues/{n}", "PATCH", {"state": "closed"})
+    return {"issue": n, "state": issue.get("state"), "url": issue.get("html_url"),
+            "message": "Issue ditutup setelah konfirmasi QA PASS manual."}
+
+
 # ---------- QA manual / automated failure feedback to one GitHub issue ----------
 QA_TRACKER = "<!-- jembatan:qa-tracker -->"
 
@@ -599,6 +637,9 @@ ROUTES = {
     ("POST", "/api/push"): lambda q, b: push(b["repo"], b["branch"], int(b["issue"]), b.get("target")),
     ("POST", "/api/pr/merge"): lambda q, b: merge_issue_pr(
         b["repo"], b["issue"], b["pr_number"], b["base"], b["head_sha"]),
+    ("GET", "/api/pr/status"): lambda q, b: issue_pr_status(q["repo"], q["issue"]),
+    ("POST", "/api/qa/pass"): lambda q, b: complete_qa_issue(
+        b["repo"], b["issue"], b.get("confirmed")),
     ("POST", "/api/qa/failure"): lambda q, b: report_qa_failure(
         b["repo"], b.get("issue"), b["log"], b.get("branch")),
     ("GET", "/api/docker/settings"): lambda q, b: docker_action(
