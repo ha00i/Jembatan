@@ -563,7 +563,7 @@ function row(i){
     <p class="context-note">PR harus ditinjau sebelum merge. QA dijalankan manual setelah merge.</p>
     <div class="row"><select data-br aria-label="Branch konteks prompt"><option value="">Branch default (konteks prompt)</option>${opts}</select><input data-files placeholder="File konteks lengkap, pisahkan koma"></div>
     <label>Branch tujuan PR / merge<select data-pr-target aria-label="Branch tujuan PR">${prTargetNames().map(name=>'<option value="'+esc(name)+'">'+esc(name)+'</option>').join('')}</select></label>
-    <div><button class="go" data-act="prompt">Buat prompt untuk ChatGPT</button></div>
+    <div><button class="go" data-act="prompt">Buat prompt LENGKAP untuk ChatGPT</button></div>
     <div data-p hidden><textarea rows="8" readonly data-prompt></textarea><button data-act="copy" data-sel="[data-prompt]">Salin prompt</button></div>
     <label>Balasan ChatGPT<textarea rows="6" data-reply placeholder="Tempel balasan lengkap, termasuk blok diff"></textarea></label>
     <div><button class="go" data-act="apply">Terapkan patch</button></div>
@@ -806,11 +806,16 @@ $('#view').onclick=async e=>{
   }
   if(act==='prompt'){
     const files=q('[data-files]').value.split(',').map(s=>s.trim()).filter(Boolean);
-    const r=await run('Menyusun prompt',()=>api('/api/prompt','POST',{repo,issue:n,branch:q('[data-br]').value,files}));
-    if(r){q('[data-p]').hidden=false;const t=q('[data-prompt]');t.value=r.prompt;copy(t);note('Prompt siap ('+r.chars+' karakter) dan sudah disalin. Tempel ke ChatGPT.')}return;
+    const target=q('[data-pr-target]').value;
+    const r=await run('Menyusun prompt lengkap',()=>api('/api/prompt','POST',
+      {repo,issue:n,branch:q('[data-br]').value,files,target}));
+    if(r){q('[data-p]').hidden=false;const t=q('[data-prompt]');t.value=r.prompt;copy(t);
+      note('Prompt lengkap ('+r.chars+' karakter) disalin. ChatGPT wajib menjawab STATUS: SELESAI tanpa kekurangan.')}return;
   }
   if(act==='apply'){
-    const r=await run('Menerapkan patch',()=>api('/api/apply','POST',{repo,issue:n,reply:q('[data-reply]').value,branch:S.applied[repo+'#'+n]}),err=>{if(/patch tidak cocok|git apply gagal|patch failed|patch does not apply/i.test(String(err.message||'')))showPatchError(err)});
+    const target=q('[data-pr-target]').value;
+    const r=await run('Memastikan patch lengkap lalu menerapkan',()=>api('/api/apply','POST',
+      {repo,issue:n,reply:q('[data-reply]').value,target,branch:S.applied[repo+'#'+n]}),err=>{if(/patch tidak cocok|git apply gagal|patch failed|patch does not apply/i.test(String(err.message||'')))showPatchError(err)});
     if(!r)return;S.applied[repo+'#'+n]=r.branch;S.open=n;
     const res=q('[data-res]');res.hidden=false;
     res.textContent='Branch '+r.branch+' (commit '+r.commit+')\n'+(r.test?(r.test.ok?'Test lolos.':'Test GAGAL.')+'\n'+r.test.output:'Patch tersimpan. Jalankan tes terpisah melalui Docker & QA; aplikasi production tidak diuji otomatis.');
