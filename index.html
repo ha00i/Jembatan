@@ -971,6 +971,14 @@ function drawDocker(){
   renderDockerActivity();
   renderDeployBranchChoices();
 }
+function dockerAppFormDirty(){
+  const app=S.dockerCfg?.app||{};
+  return $('#docker-qa-container').value.trim()!==(app.qa_container||'') ||
+    $('#docker-qa-profile').value!==(app.qa_profile||'') ||
+    $('#docker-qa-branch-mode').value!==(app.qa_branch_mode||'active') ||
+    $('#docker-deploy-branch').value!==(app.deploy_branch||'main') ||
+    $('#docker-deploy-path').value.trim()!==(app.deploy_path||'');
+}
 $('#docker-view').onchange=e=>{
   if(e.target&&e.target.id==='docker-mode')$('#docker-ssh-fields').hidden=e.target.value!=='ssh';
   if(e.target&&e.target.id==='docker-qa-branch-mode'){
@@ -1052,6 +1060,10 @@ $('#docker-view').onclick=async e=>{
       notify('Sumber branch QA belum disimpan. Klik Simpan aplikasi dahulu.','warning','QA belum siap');
       return;
     }
+    if(dockerAppFormDirty()){
+      notify('Pengaturan aplikasi berubah. Klik Simpan aplikasi sebelum menjalankan QA.','warning','QA belum siap');
+      return;
+    }
     if(!confirm('Jalankan QA pada '+(qaMode==='default'?'branch default GitHub':'branch aktif checkout QA')+
       '? Pastikan container QA dan data pengujiannya terpisah dari production.'))return;
     startDockerOperation('qa',repo);
@@ -1067,6 +1079,10 @@ $('#docker-view').onclick=async e=>{
     if(S.dockerOperation)return notify('Masih ada operasi Docker yang berjalan.','warning');
     if($('#docker-deploy-branch').value!==(S.dockerCfg?.app?.deploy_branch||'main')){
       notify('Branch deploy belum disimpan. Klik Simpan aplikasi dahulu.','warning','Deploy belum siap');
+      return;
+    }
+    if(dockerAppFormDirty()){
+      notify('Pengaturan aplikasi berubah. Klik Simpan aplikasi sebelum deploy.','warning','Deploy belum siap');
       return;
     }
     const ready=await run('Memeriksa SHA dan bukti QA',()=>api('/api/deploy/readiness?repo='+encodeURIComponent(repo)));
