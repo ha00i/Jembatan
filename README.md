@@ -32,6 +32,27 @@ chat ChatGPT dan menempel balasannya kembali. Sisanya otomatis.
 3. Tanpa Docker: `export $(cat .env | xargs) && python3 bridge.py` lalu buka http://192.168.1.2:5111 (atau http://localhost:5111 dari server itu sendiri)
    Dengan Docker: `mkdir -p /srv/jembatan/repos && docker compose up -d --build`
 
+## Membaca seluruh issue GitHub
+
+- Menu **Repositories & Issues** sekarang mengambil seluruh halaman endpoint
+  Issues GitHub hingga batas operasional 10.000 entri per repository, bukan
+  hanya 300 entri terkini. PR yang turut muncul dari endpoint GitHub dipisahkan
+  dari issue. Jika batas operasional terlampaui, Jembatan menampilkan error
+  yang jelas alih-alih memotong hasil diam-diam.
+- **Open dan closed terlihat secara default**. Gunakan tombol
+  **Sembunyikan issue selesai** bila hanya ingin pekerjaan yang belum ditutup.
+- Daftar menampilkan **50 kartu per halaman**, dengan tombol
+  **Sebelumnya / Berikutnya** dan jumlah issue yang sedang terlihat.
+  Penghitungan status mencakup semua issue yang berhasil diambil,
+  bukan hanya halaman saat ini.
+- Di setiap kartu, tekan **Baca deskripsi lengkap dan komentar**. Jembatan
+  memuat body GitHub penuh saat diminta, tanpa menghapus baris atau
+  acceptance criteria. Komentar juga dapat dibaca hingga seluruh halaman
+  selesai melalui tombol **Muat komentar berikutnya**.
+- Endpoint pembacaan: `GET /api/overview?repo=owner/repo` dan
+  `GET /api/issue/detail?repo=owner/repo&issue=N&comments_page=1`.
+  Pembacaan ini tidak mengubah issue/PR dan membutuhkan token akses Jembatan.
+
 ## Alur selesai: prompt → patch → PR → merge → QA → issue
 
 1. Sinkronkan repository lalu pilih issue. Atur **Branch tujuan PR / merge**
