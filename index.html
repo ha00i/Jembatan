@@ -401,7 +401,7 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ST={none:['Belum ada pekerjaan',1],ready:['Commit ditemukan · perlu validasi QA',2],merged_open:['Terindikasi di main · issue masih terbuka',3],done:['Issue ditutup · verifikasi QA terpisah',4]};
-let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},filter:'all',issueQuery:'',selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0,page:'repos',showClosed:false,dockerCfg:null,dockerContainers:[]};
+let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},prMerges:{},qaIssueNumber:null,filter:'all',issueQuery:'',selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0,page:'repos',showClosed:false,dockerCfg:null,dockerContainers:[]};
 $('#tok').value=tok;
 
 async function api(p,m='GET',b){
@@ -520,6 +520,19 @@ function drawMain(){
    <section id="branch-panel" class="branch-panel" aria-label="Manajemen branch"></section>`;
   drawBranchPanel();
 }
+function prTargetNames(){
+  const base=S.data?.base||'main';
+  return [...new Set([base,...(S.branchData?.branches||[]).map(b=>b.name)])];
+}
+function refreshPRTargets(){
+  const targets=prTargetNames();
+  $('#work-items')?.querySelectorAll('[data-pr-target]').forEach(select=>{
+    const current=select.value||S.data?.base;
+    select.innerHTML=targets.map(name=>'<option value="'+esc(name)+'"'+
+      (name===current?' selected':'')+'>'+esc(name)+'</option>').join('');
+    if(!targets.includes(current))select.value=S.data?.base||'';
+  });
+}
 function row(i){
   const [lbl,k]=ST[i.status],open=S.open===i.number?' open':'';
   const opts=i.branches.map(b=>`<option value="${esc(b.name)}">${esc(b.name)}</option>`).join('');
@@ -529,8 +542,9 @@ function row(i){
    <div class="body"><div class="flow-hint"><span>Buat prompt</span><span>Terapkan patch</span><span>Jalankan QA</span><span>Kirim PR</span></div>
     <p><a href="${esc(i.url)}" target="_blank" rel="noopener">Buka issue di GitHub</a></p>
     ${i.branches.length?`<ul>${i.branches.map(b=>`<li><code>${esc(b.name)}</code>: ${b.ahead} commit di depan, ${b.behind} tertinggal${b.merged?', sudah masuk':''} (${esc(b.date)})</li>`).join('')}</ul>`:'<p class="mute">Belum ada branch atau commit yang menyebut issue ini.</p>'}
-    ${i.merge_cmd?`<label>Perintah merge (jalankan setelah ditinjau dan test lolos)<textarea rows="3" readonly data-merge>${esc(i.merge_cmd)}</textarea></label><div><button data-act="copy" data-sel="[data-merge]">Salin perintah merge</button></div>`:''}
-    <div class="row"><select data-br aria-label="Branch yang disertakan"><option value="">Tanpa branch (hanya issue dan daftar file)</option>${opts}</select><input data-files placeholder="File tambahan, pisahkan koma"></div>
+    <p class="context-note">PR harus ditinjau sebelum merge. QA dijalankan manual setelah merge.</p>
+    <div class="row"><select data-br aria-label="Branch konteks prompt"><option value="">Branch default (konteks prompt)</option>${opts}</select><input data-files placeholder="File konteks lengkap, pisahkan koma"></div>
+    <label>Branch tujuan PR / merge<select data-pr-target aria-label="Branch tujuan PR">${prTargetNames().map(name=>'<option value="'+esc(name)+'">'+esc(name)+'</option>').join('')}</select></label>
     <div><button class="go" data-act="prompt">Buat prompt untuk ChatGPT</button></div>
     <div data-p hidden><textarea rows="8" readonly data-prompt></textarea><button data-act="copy" data-sel="[data-prompt]">Salin prompt</button></div>
     <label>Balasan ChatGPT<textarea rows="6" data-reply placeholder="Tempel balasan lengkap, termasuk blok diff"></textarea></label>
@@ -599,7 +613,7 @@ async function refreshBranches(repo){
     const value=await api('/api/branches?repo='+encodeURIComponent(repo));
     if(S.repo!==repo||S.branchRequestId!==requestId)return;
     if(!Array.isArray(value.branches))throw new Error('Respons daftar branch tidak valid');
-    S.branchData=value;S.branchError=null;
+    S.branchData=value;S.branchError=null;refreshPRTargets();
   }catch(e){
     if(S.repo!==repo||S.branchRequestId!==requestId)return;
     S.branchError=e.message;S.branchData=null;
