@@ -273,7 +273,7 @@ COMPOSE_FILENAMES = ("compose.yaml", "compose.yml", "docker-compose.yml",
 
 def _compose_path_valid(value):
     return (isinstance(value, str) and value.startswith("/") and len(value) <= 400 and
-            not any(char in value for char in ("\\x00", "\\n", "\\r")) and
+            not any(char in value for char in ("\x00", "\n", "\r")) and
             ".." not in Path(value).parts and len(Path(value).parts) >= 3)
 
 
@@ -304,8 +304,12 @@ def _compose_candidate(app, repo, directory, source):
         if origin.rstrip("/").removesuffix(".git") not in _repo_origin(repo):
             result["reason"] = "Remote Git folder berbeda dari repository terpilih."
             return result
-        result.update(verified=True, compose_file=compose_file,
-                      reason="Folder Compose dan remote Git sesuai repository.")
+        if source.startswith("Checkout hasil Sinkron"):
+            result.update(compose_file=compose_file, reason=(
+                "Checkout source sesuai GitHub, tetapi belum terbukti sebagai folder deployment Docker."))
+        else:
+            result.update(verified=True, compose_file=compose_file,
+                          reason="Folder Compose dan remote Git sesuai repository.")
         return result
 
     _validate_connection(cfg["mode"], cfg["host"], cfg["username"], cfg["port"])
@@ -359,8 +363,13 @@ def discover_compose_paths(app, repo):
     warnings = []
 
     def add(path, source):
-        if _compose_path_valid(path) and path not in candidates and len(candidates) < 25:
-            candidates[path] = source
+        if not _compose_path_valid(path) or path in candidates:
+            return
+        if len(candidates) >= 15:
+            if "Daftar kandidat dibatasi 15 lokasi; periksa path secara manual bila tidak muncul." not in warnings:
+                warnings.append("Daftar kandidat dibatasi 15 lokasi; periksa path secara manual bila tidak muncul.")
+            return
+        candidates[path] = source
 
     configured = _app_settings(app, repo).get("deploy_path", "")
     add(configured, "Pengaturan aplikasi saat ini")
