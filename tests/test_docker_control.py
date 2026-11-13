@@ -176,6 +176,47 @@ class DockerControlTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertFalse(result["source_verified"])
 
+    def test_active_qa_uses_container_checkout_not_deploy_target(self):
+        self.set_qa()
+        sha = "a" * 40
+        with patch.object(ctl, "_docker", side_effect=[
+            "true|false|bridge", "feature/login",
+            "https://github.com/ha00i/Jembatan.git",
+            sha, "", "All tests passed", sha, "", "feature/login"
+        ]) as dock:
+            result = ctl.run_qa(self.app, "ha00i/Jembatan", on_event=lambda *x: None,
+                                branch_mode="active")
+        self.assertTrue(result["source_verified"])
+        self.assertEqual(result["source_branch"], "feature/login")
+        self.assertEqual(dock.call_count, 9)
+
+    def test_default_qa_requires_exact_checkout_without_switching(self):
+        self.set_qa()
+        with patch.object(ctl, "_docker", side_effect=[
+            "true|false|bridge", "feature/login",
+            "https://github.com/ha00i/Jembatan"
+        ]) as dock:
+            with self.assertRaisesRegex(ctl.DockerError, "Pindahkan checkout QA dahulu"):
+                ctl.run_qa(self.app, "ha00i/Jembatan", on_event=lambda *x: None,
+                           branch_mode="default", required_branch="main")
+        self.assertEqual(dock.call_count, 3)
+
+    def test_qa_refuses_mismatched_checkout_origin_before_running_tests(self):
+        self.set_qa()
+        with patch.object(ctl, "_docker", side_effect=[
+            "true|false|bridge", "main", "https://github.com/other/other.git"
+        ]) as dock:
+            with self.assertRaisesRegex(ctl.DockerError, "Origin Git container QA"):
+                ctl.run_qa(self.app, "ha00i/Jembatan", on_event=lambda *x: None,
+                           branch_mode="active")
+        self.assertEqual(dock.call_count, 3)
+
+    def test_default_qa_rejects_missing_branch(self):
+        self.set_qa()
+        with self.assertRaisesRegex(ctl.DockerError, "Branch default GitHub"):
+            ctl.run_qa(self.app, "ha00i/Jembatan", on_event=lambda *x: None,
+                       branch_mode="default", required_branch="../bad")
+
     def test_deploy_requires_exact_confirmation(self):
         with self.assertRaisesRegex(ctl.DockerError, "Konfirmasi"):
             ctl.deploy(self.app, "ha00i/Jembatan", "yes")
@@ -245,10 +286,21 @@ class DockerControlTests(unittest.TestCase):
             with self.assertRaisesRegex(ctl.DockerError, "tidak cocok"):
                 ctl.deploy(self.app, "ha00i/Jembatan", "ha00i/Jembatan", "main", SHA)
 
-    def test_rejects_unknown_deploy_branch(self):
-        with self.assertRaisesRegex(ctl.DockerError, "main atau staging"):
-            ctl.save_app(self.app, {"repo": "ha00i/Jembatan",
-                                    "deploy_branch": "feature-untrusted"})
+    def test_rejects_unsafe_deploy_branch(self):
+        for name in ("../prod", "feature//bad", "feature;rm -rf /", "feature/.."):
+            with self.subTest(name=name):
+                with self.assertRaisesRegex(ctl.DockerError, "Branch deploy tidak valid"):
+                    ctl.save_app(self.app, {"repo": "ha00i/Jembatan",
+                                            "deploy_branch": name})
+
+    def test_allows_any_valid_deploy_branch_independent_from_qa(self):
+        app = ctl.save_app(self.app, {"repo": "ha00i/Jembatan",
+                                     "deploy_branch": "release/v2",
+                                     "qa_branch_mode": "default"})
+        self.assertEqual(app["deploy_branch"], "release/v2")
+        self.assertEqual(app["qa_branch_mode"], "default")
+        with self.assertRaisesRegex(ctl.DockerError, "Sumber branch QA"):
+            ctl.save_app(self.app, {"repo": "ha00i/Jembatan", "qa_branch_mode": "release/v2"})
 
     def test_deploy_without_sha_evidence_is_blocked(self):
         with self.assertRaisesRegex(ctl.DockerError, "Bukti QA"):
