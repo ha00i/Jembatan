@@ -25,6 +25,14 @@ class ComposeDiscoveryUIContract(unittest.TestCase):
         self.assertIn("if(!item?.verified)return notify(", HTML)
         self.assertIn("S.composeCandidates.candidates.find(p=>p.path===b.dataset.composePath)", HTML)
 
+    def test_unverified_candidates_can_be_copied_without_deploying(self):
+        self.assertIn('data-docker="copy-compose"', HTML)
+        self.assertIn('title="Salin path yang belum terverifikasi"', HTML)
+        self.assertIn("if(act==='copy-compose'){", HTML)
+        self.assertIn("const copied=await copy(field)", HTML)
+        self.assertIn("periksa mount/SSH sebelum digunakan.", HTML)
+        self.assertIn("if(!item?.verified)return notify(", HTML)
+
     def test_selecting_path_requires_save_app_before_deploy(self):
         self.assertIn("$('#docker-deploy-path').value=item.path;", HTML)
         self.assertIn("Path belum disimpan", HTML)
