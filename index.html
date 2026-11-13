@@ -502,7 +502,14 @@ $('#patch-toast-copy').onclick=async()=>{
   $('#patch-toast-copy').textContent=copied?'Detail disalin':'Salin manual dari detail';
 };
 
-function copy(el){el.select();try{navigator.clipboard.writeText(el.value)}catch(_){document.execCommand('copy')}}
+async function copy(el){
+  if(!el||typeof el.value!=='string')return false;
+  if(navigator.clipboard?.writeText){
+    try{await navigator.clipboard.writeText(el.value);return true}catch(_){}
+  }
+  el.focus();el.select();
+  try{return document.execCommand('copy')===true}catch(_){return false}
+}
 
 $('#login').onclick=()=>{tok=$('#tok').value.trim();if(!tok)return note('Masukkan token akses terlebih dahulu.',1);sessionStorage.setItem('jb-token',tok);loadRepos()};
 $('#logout').onclick=()=>{sessionStorage.removeItem('jb-token');location.reload()};
@@ -770,14 +777,21 @@ $('#view').onclick=async e=>{
   if(act==='reload')return openRepo(repo);
   if(act==='open-docker')return $('#nav-docker').click();
   if(act==='toggle-closed'){S.showClosed=!S.showClosed;return drawMain()}
-  if(act==='copy')return copy(q(b.dataset.sel));
+  if(act==='copy'){
+    const copied=await copy(q(b.dataset.sel));
+    if(!copied)notify('Clipboard tidak tersedia. Pilih teks pada kotak prompt lalu salin manual.','warning','Salin gagal');
+    return;
+  }
   if(act==='prompt-prev'||act==='prompt-next'){
     const record=S.promptPacks[repo+'#'+n];
     if(!record)return notify('Paket prompt tidak tersedia. Buat ulang prompt.','warning');
     const step=act==='prompt-next'?1:-1;
     record.index=Math.min(record.parts.length-1,Math.max(0,record.index+step));
     renderPromptPack(box,record);
-    if(step>0)copy(q('[data-prompt]'));
+    if(step>0){
+      const copied=await copy(q('[data-prompt]'));
+      if(!copied)notify('Bagian sudah ditampilkan, tetapi belum tersalin. Salin manual dari kotak teks.','warning','Clipboard gagal');
+    }
     return;
   }
   if(act==='deploy')return $('#nav-docker').click();
@@ -874,11 +888,12 @@ $('#view').onclick=async e=>{
         ': '+(r.files_included||[]).join(', ')+'. Total '+r.chars+' karakter.'+
         (parts.length>1?' Dibagi menjadi '+parts.length+' bagian tanpa menghapus isi.':'');
       renderPromptPack(box,record);
-      copy(q('[data-prompt]'));
+      const copied=await copy(q('[data-prompt]'));
+      if(!copied)notify('Prompt ditampilkan, tetapi clipboard gagal. Salin manual dari kotak teks.','warning','Clipboard gagal');
       note(parts.length>1?
-        'Bagian 1/'+parts.length+' disalin. Tempel ke ChatGPT, lalu klik Bagian berikutnya & salin. Kerjakan hanya setelah bagian terakhir.':
+        'Bagian 1/'+parts.length+(copied?' disalin.':' siap disalin manual.')+' Tempel ke ChatGPT, lalu klik Bagian berikutnya & salin. Kerjakan hanya setelah bagian terakhir.':
         'Prompt lengkap ('+r.chars+' karakter, '+(r.files_included||[]).length+
-        ' file utuh) disalin. Balasan harus STATUS: SELESAI tanpa kekurangan.');
+        ' file utuh) '+(copied?'disalin.':'siap disalin manual.')+' Balasan harus STATUS: SELESAI tanpa kekurangan.');
     }return;
   }
   if(act==='apply'){
