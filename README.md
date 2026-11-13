@@ -32,6 +32,23 @@ chat ChatGPT dan menempel balasannya kembali. Sisanya otomatis.
 3. Tanpa Docker: `export $(cat .env | xargs) && python3 bridge.py` lalu buka http://192.168.1.2:5111 (atau http://localhost:5111 dari server itu sendiri)
    Dengan Docker: `mkdir -p /srv/jembatan/repos && docker compose up -d --build`
 
+## Navigasi ringkas dan ruang daftar issue
+
+Menu atas **Repositories & Issues / Docker & QA** yang sebelumnya
+menduplikasi tombol sudah dihilangkan. Saat repository dipilih, buka
+**Docker & QA** lewat tombol di sebelah **Muat ulang** pada header repository.
+Di halaman Docker tersedia **Kembali ke Issues**, termasuk ketika pengaturan
+Docker gagal dimuat. Sebelum memilih repository, gunakan tombol
+**Pengaturan Docker & QA** di layar pembuka.
+
+Di desktop dengan viewport pendek (tinggi di bawah 760 px), Jembatan membuka
+repository dengan **Fokus daftar** aktif secara default. Ringkasan dan catatan
+status disembunyikan sementara agar panel issue mendapat ruang vertikal lebih
+luas; tekan **Tampilkan ringkasan** jika ingin melihat statistik lagi.
+Di desktop yang lebih tinggi ringkasan tampil seperti biasa, dan tombol Fokus
+daftar tetap tersedia. Nilai, filter, pagination, isi issue/PR, serta navigasi
+QA tidak berubah. Penyesuaian ini hanya mengubah tata letak dan navigasi.
+
 ## Workspace layar penuh dan scroll bertingkat
 
 Pada layar desktop, dashboard Jembatan sekarang memakai tinggi viewport.
