@@ -344,6 +344,10 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
 .branch-grid-row:hover{background:#F7FAFF}
 .docker-panel{border-radius:16px}
 .docker-panel h3{color:#203253}
+.docker-branch-divider{height:1px;background:linear-gradient(90deg,#b9cef1,transparent);margin:24px 0 4px}
+#docker-qa-source-hint{margin-top:8px}
+#docker-qa-branch-mode{border-left:3px solid #2082d7}
+#docker-deploy-branch{border-left:3px solid #14a998}
 .deploy-readiness{background:#F8FAFF;border-color:#DCE5F4}
 .docker-activity{border-radius:16px}
 .activity-spinner{border-top-color:#2A79EA}
@@ -868,12 +872,12 @@ function renderDeployBranchChoices(){
     (name===current?' selected':'')+'>'+esc(name)+
     (name===info.default_branch?' (default)':'')+'</option>').join('');
   select.innerHTML=stale+options||
-    '<option value="" disabled selected>Tidak ada main/staging</option>';
+    '<option value="" disabled selected>Tidak ada branch yang valid</option>';
   select.disabled=!!S.dockerOperation||!available.length;
   if(hint)hint.textContent=missing?
     'Branch '+current+' sudah tidak tersedia. Pilih branch dari daftar, lalu klik Simpan aplikasi.':
     available.length?'Tersedia di GitHub: '+available.join(', ')+'.':
-    'Repository ini tidak memiliki branch main atau staging. Deployment diblokir.';
+    'Repository belum memiliki branch GitHub yang dapat digunakan. Deployment diblokir.';
 }
 async function refreshDeployBranches(repo){
   if(!repo||S.repo!==repo)return;
@@ -937,7 +941,13 @@ function drawDocker(){
    '<input id="docker-qa-container" placeholder="vortex-qa-qa-app-1" value="'+esc(app.qa_container||'')+'"'+disabled+'>',
    '<label for="docker-qa-profile">Jenis tes</label><select id="docker-qa-profile"'+disabled+'>',
    '<option value="">Pilih profil QA</option>'+profiles+'</select>',
-   '<label for="docker-deploy-branch">Branch untuk deploy</label><select id="docker-deploy-branch" disabled>',
+   '<label for="docker-qa-branch-mode">Sumber branch untuk QA</label>',
+   '<select id="docker-qa-branch-mode"'+disabled+'>',
+   '<option value="active"'+((app.qa_branch_mode||'active')==='active'?' selected':'')+'>Branch aktif (checkout container QA)</option>',
+   '<option value="default"'+(app.qa_branch_mode==='default'?' selected':'')+'>Branch default GitHub</option></select>',
+   '<p class="docker-caption" id="docker-qa-source-hint">Aktif = branch checkout QA saat ini. Default = branch utama GitHub; checkout QA harus sudah berada di branch tersebut.</p>',
+   '<div class="docker-branch-divider" role="separator"></div>',
+   '<label for="docker-deploy-branch">Branch untuk deploy (independen dari QA)</label><select id="docker-deploy-branch" disabled>',
    '<option value="">Memeriksa branch GitHub...</option></select>',
    '<p class="docker-caption" id="docker-branch-hint" role="status">Hanya branch yang benar-benar ada di GitHub.</p>',
    '<label for="docker-deploy-path">Path Compose aplikasi</label>',
@@ -945,7 +955,7 @@ function drawDocker(){
    '<div class="row"><button data-docker="save-app"'+disabled+'>Simpan aplikasi</button>',
    '<button class="go" data-docker="qa"'+disabled+'>Run QA</button>',
    '<button class="danger-outline" data-docker="deploy"'+disabled+'>Deploy</button></div>',
-   '<p class="docker-caption">QA harus PASS pada commit branch target yang sama. Container QA harus menyediakan Git checkout yang dapat diverifikasi. Deploy meminta konfirmasi nama repo.</p>',
+   '<p class="docker-caption">QA bisa memakai branch aktif atau default GitHub. Branch deploy dipilih sendiri. Jika berbeda branch, deploy hanya diizinkan bila SHA commit sama dan QA sudah terverifikasi.</p>',
    '<div class="deploy-readiness" id="deploy-ready-box" role="status"><div><strong id="deploy-ready-label">Belum diperiksa</strong><p id="deploy-ready-detail">Periksa SHA GitHub dan bukti QA sebelum deploy.</p></div><button data-docker="check-ready" type="button">Periksa kesiapan</button></div>',
    '</div>',
    '<section class="docker-activity docker-wide" id="docker-activity" aria-label="Status pekerjaan Docker" role="status" hidden></section>',
@@ -961,6 +971,13 @@ function drawDocker(){
 }
 $('#docker-view').onchange=e=>{
   if(e.target&&e.target.id==='docker-mode')$('#docker-ssh-fields').hidden=e.target.value!=='ssh';
+  if(e.target&&e.target.id==='docker-qa-branch-mode'){
+    const hint=$('#docker-qa-source-hint');
+    if(hint)hint.textContent=(e.target.value==='default'?
+      'QA menggunakan default branch GitHub. Container QA harus sudah checkout branch tersebut.':
+      'QA menggunakan branch aktif dari checkout container QA.')+
+      ' Klik Simpan aplikasi sebelum Run QA.';
+  }
   if(e.target&&e.target.id==='docker-deploy-branch'){
     const label=$('#deploy-ready-label'),detail=$('#deploy-ready-detail');
     if(label)label.textContent='Branch belum disimpan';
@@ -1013,7 +1030,9 @@ $('#docker-view').onclick=async e=>{
       return;
     }
     const body={repo,qa_container:$('#docker-qa-container').value.trim(),
-      qa_profile:$('#docker-qa-profile').value,deploy_branch:$('#docker-deploy-branch').value,
+      qa_profile:$('#docker-qa-profile').value,
+      qa_branch_mode:$('#docker-qa-branch-mode').value,
+      deploy_branch:$('#docker-deploy-branch').value,
       deploy_path:$('#docker-deploy-path').value.trim()};
     const r=await run('Menyimpan aplikasi',()=>api('/api/docker/app','POST',body));
     if(r){
@@ -1026,7 +1045,13 @@ $('#docker-view').onclick=async e=>{
   }
   if(act==='qa'){
     if(S.dockerOperation)return notify('Masih ada operasi Docker yang berjalan.','warning');
-    if(!confirm('Jalankan tes preset hanya di container QA yang database dan volumenya sudah kamu pisahkan dari production?'))return;
+    const qaMode=$('#docker-qa-branch-mode').value;
+    if(qaMode!==(S.dockerCfg?.app?.qa_branch_mode||'active')){
+      notify('Sumber branch QA belum disimpan. Klik Simpan aplikasi dahulu.','warning','QA belum siap');
+      return;
+    }
+    if(!confirm('Jalankan QA pada '+(qaMode==='default'?'branch default GitHub':'branch aktif checkout QA')+
+      '? Pastikan container QA dan data pengujiannya terpisah dari production.'))return;
     startDockerOperation('qa',repo);
     const r=await run('Menyiapkan QA verbose',()=>api('/api/docker/qa/start','POST',{repo}));
     if(!r){
@@ -1038,6 +1063,10 @@ $('#docker-view').onclick=async e=>{
   }
   if(act==='deploy'){
     if(S.dockerOperation)return notify('Masih ada operasi Docker yang berjalan.','warning');
+    if($('#docker-deploy-branch').value!==(S.dockerCfg?.app?.deploy_branch||'main')){
+      notify('Branch deploy belum disimpan. Klik Simpan aplikasi dahulu.','warning','Deploy belum siap');
+      return;
+    }
     const ready=await run('Memeriksa SHA dan bukti QA',()=>api('/api/deploy/readiness?repo='+encodeURIComponent(repo)));
     if(!ready)return;
     S.deployReadiness=ready;
