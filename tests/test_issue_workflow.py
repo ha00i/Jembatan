@@ -75,6 +75,9 @@ class PromptContract(TestCase):
         for reply in (
             COMPLETE.replace("STATUS: SELESAI", "STATUS: SEBAGIAN"),
             COMPLETE.replace("- tidak ada", "- Menu belum dibuat"),
+            COMPLETE.replace("PERUBAHAN:", "PERUBAHAN HILANG:"),
+            COMPLETE.replace("VERIFIKASI:", "VERIFIKASI HILANG:"),
+            COMPLETE.replace("PATCH:", "PATCH HILANG:"),
             "BUTUH FILE: src/other.py\n" + COMPLETE,
             COMPLETE.replace("```diff\n", ""),
             COMPLETE.replace("```\n", ""),
