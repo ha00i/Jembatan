@@ -24,7 +24,11 @@ def _sanitize(text, app):
         if isinstance(secret, str) and len(secret) >= 8:
             value = value.replace(secret, "[REDACTED]")
     value = re.sub(r"(?i)(?:github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9_]+)", "[REDACTED_TOKEN]", value)
-    value = re.sub(r"(?im)((?:password|secret|api[_-]?key|token)\s*[:=]\s*)\S+", r"\1[REDACTED]", value)
+    value = re.sub(r"(?im)(Authorization\s*:\s*(?:Bearer|Basic)\s+)\S+",
+                   r"\1[REDACTED]", value)
+    value = re.sub(r"(?i)(https?://)[^\s/@]+:[^\s/@]+@", r"\1[REDACTED]@", value)
+    value = re.sub(r"(?im)((?:password|secret|api[_-]?key|token)\s*[:=]\s*)\S+",
+                   r"\1[REDACTED]", value)
     return value
 
 
