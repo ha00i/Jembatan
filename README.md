@@ -1,5 +1,35 @@
 # Jembatan
 
+## Superpowers — fondasi opt-in (iterasi 1)
+
+Workflow Superpowers **belum mengganti alur lama**. Fondasi telah disediakan
+di `workflow.py` menggunakan SQLite (`JEMBATAN_DATA/workflow.db`),
+dengan lock/idempotensi per issue, event audit append-only, dan dua API:
+
+- `POST /api/workflow/start`: mulai run `penuh` atau `cepat`, validasi
+  issue GitHub, default branch, SHA, dan mode eksekusi.
+- `GET /api/workflow/state?repo=owner/name&issue=N`: baca fase, status,
+  gate, audit, dan artefak run yang sama setelah restart.
+
+Keduanya memakai **token UI yang sudah ada**, tanpa token baru. Sampai
+iterasi berikutnya selesai, gate `can_advance`, `qa_verified`,
+`merge_allowed`, dan `deploy_allowed` **tetap false**; workflow belum
+bisa mengeksekusi kode, QA, PR, atau deploy.
+
+Docker Compose memasang data persisten di
+`/srv/jembatan/workflow-state` pada host. Jangan hapus direktori ini
+saat `docker compose up -d --build`. Untuk menjalankan tanpa Docker,
+atur `JEMBATAN_DATA` ke direktori yang bisa ditulis terlebih dahulu.
+
+Baca [docs/SUPERPOWERS-WORKFLOW.md](docs/SUPERPOWERS-WORKFLOW.md) untuk
+kontrak API dan sisa iterasi. Jalankan tes:
+
+```bash
+python3 -W error::ResourceWarning -m unittest discover -s tests -p "test_workflow_state.py" -v
+python3 -m unittest discover -s tests -p "test_workflow_routes.py" -v
+python3 -m unittest discover -s tests -v
+```
+
 ## Branding Jembatan
 
 Identitas visual baru menggunakan siluet jembatan dan node alur kerja
