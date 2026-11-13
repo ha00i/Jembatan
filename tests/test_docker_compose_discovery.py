@@ -99,7 +99,7 @@ class ComposeDiscoveryTests(unittest.TestCase):
     def test_rejects_injected_and_relative_paths(self):
         for path in ("../../tmp/project", "/tmp/x/../project",
                      "/tmp/project\nrm -rf /", "/tmp/project\x00bad",
-                     "/tmp/project\rbad", "/tmp/abc"):
+                     "/tmp/project\rbad", "/tmp"):
             with self.subTest(path=path):
                 self.assertFalse(ctl._compose_path_valid(path))
         self.assertTrue(ctl._compose_path_valid("/srv/erp/releases/v1"))
