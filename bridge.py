@@ -217,6 +217,61 @@ akan DITOLAK Jembatan. QA dan merge tetap tahap terpisah."""
 
 
 MAX_PROMPT_CHARS = 125000
+# Context may be much longer than one ChatGPT message. Transport it without
+# deleting code or diff hunks; keep room for the per-message protocol.
+PROMPT_PART_PAYLOAD_CHARS = 105000
+
+
+def package_prompt_parts(content):
+    """Lossless, ordered copy/paste messages for one logical ChatGPT prompt.
+
+    Early messages are context only. The final one authorizes generation.
+    Each part stays under the legacy single-message limit.
+    """
+    if not isinstance(content, str) or not content:
+        raise Err("Konten prompt kosong", 409)
+    if len(content) <= MAX_PROMPT_CHARS:
+        return [content]
+    chunks = []
+    start = 0
+    while start < len(content):
+        end = min(start + PROMPT_PART_PAYLOAD_CHARS, len(content))
+        if end < len(content):
+            newline = content.rfind("\n", start + PROMPT_PART_PAYLOAD_CHARS // 2, end)
+            if newline > start:
+                end = newline + 1
+        chunks.append(content[start:end])
+        start = end
+    fingerprint = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+    count = len(chunks)
+    parts = []
+    for idx, payload in enumerate(chunks, 1):
+        last = idx == count
+        instruction = (
+            "INI BAGIAN TERAKHIR. Sekarang gunakan SEMUA bagian konteks " +
+            f"1 sampai {count} secara berurutan dan kerjakan issue SEPENUHNYA. " +
+            "Ikuti kontrak STATUS/KEKURANGAN/PERUBAHAN/VERIFIKASI/PATCH. " +
+            "Jika konteks tidak lagi tersedia di percakapan atau butuh file " +
+            "tambahan, jawab hanya BUTUH FILE: path; jangan mengarang atau " +
+            "mengklaim selesai.\n"
+            if last else
+            "INI HANYA KONTEKS. Jangan mulai coding, menganalisis hasil, " +
+            "menulis patch, atau mengklaim selesai. Tunggu semua bagian. " +
+            f"Balas hanya: BAGIAN {idx}/{count} DITERIMA.\n"
+        )
+        prefix = (
+            f"JEMBATAN — PAKET KONTEKS {fingerprint} | BAGIAN {idx}/{count}\n"
+            "Semua bagian adalah SATU permintaan, bukan tugas terpisah. "
+            "Urutkan isi antarbagian tanpa menambah/menghapus karakter; "
+            "batas bagian dapat berada di tengah baris atau blok kode.\n"
+            + instruction + "\n=== AWAL KONTEN BAGIAN ===\n"
+        )
+        suffix = f"\n=== AKHIR KONTEN BAGIAN {idx}/{count} ===\n"
+        part = prefix + payload + suffix
+        if len(part) > MAX_PROMPT_CHARS:
+            raise Err("Bagian prompt melebihi batas karakter; hubungi pengelola.", 500)
+        parts.append(part)
+    return parts
 
 
 def pick_context_files(tree, issue, changed=()):
@@ -299,11 +354,11 @@ def build_prompt(r, n, branch=None, files=(), target=None):
               *context_fence(git(d, "show", f"origin/{ref}:{file}")), ""]
     p.append(FORMAT)
     result = "\n".join(p)
-    if len(result) > MAX_PROMPT_CHARS:
-        raise Err(f"Prompt memerlukan {len(result)} karakter; terlalu besar untuk "
-                  "satu permintaan. Pilih lebih sedikit file atau diff branch "
-                  "lebih kecil. Jembatan tidak memotong konteks diam-diam.", 409)
-    return {"prompt": result, "chars": len(result), "complete_context": True,
+    parts = package_prompt_parts(result)
+    return {"prompt": result if len(parts) == 1 else None,
+            "parts": parts, "part_count": len(parts),
+            "multipart": len(parts) > 1,
+            "chars": len(result), "complete_context": True,
             "files_included": selected, "auto_context": auto_selected,
             "branch": ref}
 
