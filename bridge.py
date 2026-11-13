@@ -613,7 +613,7 @@ ROUTES = {
         docker_control.containers),
     ("POST", "/api/docker/qa"): lambda q, b: legacy_qa(b["repo"]),
     ("POST", "/api/docker/qa/start"): lambda q, b: docker_action(
-        qa_jobs.start, b["repo"]),
+        qa_jobs.start, b["repo"], b.get("issue"), b.get("report_on_fail", False)),
     ("GET", "/api/docker/qa/status"): lambda q, b: docker_action(
         qa_jobs.status, q["repo"]),
     ("GET", "/api/deploy/readiness"): lambda q, b: deploy_readiness(q["repo"]),
