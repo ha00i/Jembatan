@@ -43,8 +43,18 @@ chat ChatGPT dan menempel balasannya kembali. Sisanya otomatis.
    berdasarkan judul/isi issue dan perubahan branch. Daftar file yang dipakai
    terlihat di bawah tombol prompt; ChatGPT wajib meminta file tambahan jika
    pilihan otomatis belum mencukupi.
-   Jika melebihi batas **125.000 karakter**, pembuatan prompt ditolak dengan
-   pesan jelas agar file konteks dikurangi, bukan dikirim sebagian.
+   Jika konteks melampaui **125.000 karakter**, Jembatan kini membuat
+   **paket prompt berurutan tanpa menghapus isi**: bagian-bagian sekitar
+   105.000 karakter, masing-masing dengan identitas paket dan nomor urut.
+   Di UI tekan **Salin bagian ini**, tempel ke **percakapan ChatGPT yang sama**,
+   lalu **Bagian berikutnya & salin**. ChatGPT diminta menunggu sampai
+   **bagian terakhir** sebelum mengerjakan dan memberikan satu patch lengkap.
+   Bagian lebih awal bukan pekerjaan sebagian; hanya transfer konteks.
+   Jika percakapan ChatGPT mencapai batas jendela konteks, model mungkin
+   perlu meminta file tertentu; penanda `STATUS: SELESAI` saja **bukan bukti
+   lengkapnya implementasi**, sehingga review dan QA tetap wajib.
+   Paket besar disimpan di memori tab browser; refresh mengharuskan
+   pembuatan paket ulang (tidak ada pembacaan otomatis isi clipboard).
 3. Tempel prompt ke ChatGPT. Jawaban wajib **STATUS: SELESAI**,
    **KEKURANGAN: - tidak ada**, dan satu blok unified diff lengkap.
    Jawaban **SEBAGIAN/BELUM**, membutuhkan file, atau diff belum lengkap
