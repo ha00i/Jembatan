@@ -57,6 +57,8 @@ def _public(job, app):
         "source_sha": job.get("source_sha"), "qa_verified": job.get("qa_verified", False),
         "verify_reason": job.get("verify_reason", "Belum ada bukti SHA"),
         "issue_number": job.get("issue_number"),
+        "post_merge_branch": job.get("post_merge_branch"),
+        "merged_pr_number": job.get("merged_pr_number"),
         "report_issue_url": job.get("report_issue_url"),
         "followup_prompt": job.get("followup_prompt"),
         "report_error": job.get("report_error"),
@@ -110,10 +112,16 @@ def _runner(app, job):
                     expected_sha = None
             except Exception:
                 expected_sha = None
+        post_merge_branch = job.get("post_merge_branch")
+        correct_pr_branch = (not post_merge_branch or source_branch == post_merge_branch)
         verified = bool(result["ok"] and expected_sha and branch_matches_mode and
-                        result.get("source_verified") and source_sha == expected_sha)
+                        correct_pr_branch and result.get("source_verified") and
+                        source_sha == expected_sha)
         if verified:
             reason = "QA " + source_branch + " PASS pada SHA GitHub " + source_sha[:12]
+        elif result["ok"] and post_merge_branch and not correct_pr_branch:
+            reason = ("QA harus dijalankan pada branch hasil merge PR: " +
+                      post_merge_branch + ", bukan " + str(source_branch))
         elif result["ok"] and expected_sha and source_sha and source_sha != expected_sha:
             reason = "SHA checkout QA tidak cocok dengan branch GitHub " + source_branch
         elif result["ok"] and not expected_sha and branch_matches_mode:
@@ -189,8 +197,20 @@ def start(app, repo, issue_number=None, report_on_fail=False):
         issue = app.gh(f"/repos/{repo}/issues/{issue_number}")
         if issue.get("pull_request"):
             raise docker_control.DockerError("Nomor issue QA mengarah ke PR", 409)
+        if not callable(getattr(app, "issue_pr_status", None)):
+            raise docker_control.DockerError("Pemeriksaan PR untuk QA tidak tersedia", 409)
+        pr = app.issue_pr_status(repo, issue_number)
+        if not pr.get("merged"):
+            raise docker_control.DockerError(
+                "Issue belum memiliki PR merged dari Jembatan. Merge dahulu sebelum QA final.", 409)
+        post_merge_branch = pr.get("base")
+        if not docker_control.valid_branch(post_merge_branch):
+            raise docker_control.DockerError("Branch tujuan PR merged tidak valid", 409)
+        pr_number = pr.get("number")
     else:
         issue_number = None
+        post_merge_branch = None
+        pr_number = None
     with _LOCK:
         if _ACTIVE:
             busy = next((j for j in _JOBS.values() if j["id"] == _ACTIVE), None)
@@ -203,6 +223,7 @@ def start(app, repo, issue_number=None, report_on_fail=False):
         job = dict(id=identifier, repo=repo, container=mapping["qa_container"],
                    profile=mapping["qa_profile"], qa_branch_mode=mode, qa_branch=None,
                    issue_number=issue_number, report_on_fail=report_on_fail,
+                   post_merge_branch=post_merge_branch, merged_pr_number=pr_number,
                    report_issue_url=None, report_error=None, followup_prompt=None,
                    source_sha=None, qa_verified=False, verify_reason="Menunggu pemeriksaan",
                    state="queued", stage="Menyiapkan QA",
