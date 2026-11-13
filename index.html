@@ -492,6 +492,12 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
  .issue-workspace #work-items{padding:7px}
  .issue-workspace .issue-pagination{font-size:11px}
 }
+/* Focus mode preserves cards, filters, scroll offset and issue actions. */
+#view.repo-workspace.is-list-focused>.context-note,
+#view.repo-workspace.is-list-focused>.metrics{display:none}
+#view.repo-workspace.is-list-focused>.head{margin-bottom:13px}
+#view.repo-workspace>.head [data-act="toggle-list-focus"]{color:#205ABA;border-color:#C6D9F4;background:#EDF4FF}
+#view.repo-workspace.is-list-focused>.head [data-act="toggle-list-focus"]{background:#1C58C0;border-color:#1C58C0;color:white}
 </style>
 </head>
 <body>
@@ -527,7 +533,7 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ST={none:['Belum ada pekerjaan',1],ready:['Commit ditemukan · perlu validasi QA',2],merged_open:['Terindikasi di main · issue masih terbuka',3],done:['Issue ditutup · verifikasi QA terpisah',4]};
-let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},prMerges:{},promptPacks:{},qaIssueNumber:null,filter:'all',issueQuery:'',issuePage:0,repoPanel:'issues',selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0,page:'repos',showClosed:true,dockerCfg:null,dockerContainers:[]};
+let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},prMerges:{},promptPacks:{},qaIssueNumber:null,filter:'all',issueQuery:'',issuePage:0,repoPanel:'issues',listFocus:false,selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0,page:'repos',showClosed:true,dockerCfg:null,dockerContainers:[]};
 $('#tok').value=tok;
 
 async function api(p,m='GET',b){
@@ -633,7 +639,7 @@ $('#repos').onclick=e=>{const b=e.target.closest('[data-open]');if(b)openRepo(b.
 
 async function openRepo(n){
   S.qaIssueNumber=Number(sessionStorage.getItem('jb-qa-issue-'+n))||null;
-  S.repo=n;S.filter='all';S.issueQuery='';S.issuePage=0;S.repoPanel='issues';S.data=null;S.branchData=null;S.branchError=null;S.branchLoading=true;S.branchQuery='';S.branchFilter='all';S.branchRequestId++;$('#view').classList.remove('repo-workspace');if($('#branch-delete-dialog').open)$('#branch-delete-dialog').close();drawRepos();
+  S.repo=n;S.filter='all';S.issueQuery='';S.issuePage=0;S.repoPanel='issues';S.listFocus=false;S.data=null;S.branchData=null;S.branchError=null;S.branchLoading=true;S.branchQuery='';S.branchFilter='all';S.branchRequestId++;$('#view').classList.remove('repo-workspace');if($('#branch-delete-dialog').open)$('#branch-delete-dialog').close();drawRepos();
   $('#view').innerHTML='<div class="welcome"><span class="eyebrow">Memuat repository</span><h2>Memeriksa issue dan branch...</h2><p>Data dibaca dari sinkronisasi lokal dan GitHub.</p></div>';
   const d=await run('Membaca branch dan issue',()=>api('/api/overview?repo='+encodeURIComponent(n)));
   if(d){S.data=d;drawMain();refreshBranches(n);if(S.page==='docker')refreshDocker()}
@@ -645,9 +651,10 @@ function drawMain(){
   // All fetched issues count toward the summary; only 50 cards render per page.
   // Closed issues are visible by default and can be hidden explicitly.
   $('#view').classList.add('repo-workspace');
+  $('#view').classList.toggle('is-list-focused',!!S.listFocus);
   $('#view').innerHTML=`
    <div class="head"><h2>${esc(d.repo)} <span class="mute">(utama: ${esc(d.base)})</span></h2>
-    <div class="row"><button data-act="reload">Muat ulang</button><button data-act="open-docker">Docker & QA</button></div></div>
+    <div class="row"><button data-act="toggle-list-focus" aria-pressed="${!!S.listFocus}">${S.listFocus?'Tampilkan ringkasan':'Fokus daftar'}</button><button data-act="reload">Muat ulang</button><button data-act="open-docker">Docker & QA</button></div></div>
    <p class="context-note">Status diperoleh dari riwayat Git dan GitHub; bukan bukti QA atau persetujuan merge.</p><pre id="deploy-out" hidden></pre>
    <div class="metrics"><div class="metric"><span class="marker"></span><span class="value">${cnt('none')}</span><span class="meta">Belum ditangani</span></div><div class="metric review"><span class="marker"></span><span class="value">${cnt('ready')}</span><span class="meta">Perlu validasi</span></div><div class="metric merged"><span class="marker"></span><span class="value">${cnt('merged_open')}</span><span class="meta">Diduga sudah di main</span></div><div class="metric done"><span class="marker"></span><span class="value">${cnt('done')}</span><span class="meta">Issue ditutup</span></div></div>
    <div class="workspace-switch" role="group" aria-label="Panel repository">
@@ -971,6 +978,13 @@ $('#view').onclick=async e=>{
   if(act==='open-docker')return $('#nav-docker').click();
   if(act==='workspace-issues'||act==='workspace-branches'){
     setRepoPanel(act==='workspace-branches'?'branches':'issues');
+    return;
+  }
+  if(act==='toggle-list-focus'){
+    S.listFocus=!S.listFocus;
+    $('#view').classList.toggle('is-list-focused',S.listFocus);
+    b.setAttribute('aria-pressed',String(S.listFocus));
+    b.textContent=S.listFocus?'Tampilkan ringkasan':'Fokus daftar';
     return;
   }
   if(act==='toggle-closed'){S.showClosed=!S.showClosed;S.issuePage=0;return drawMain()}
