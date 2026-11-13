@@ -250,6 +250,13 @@ def pick_context_files(tree, issue, changed=()):
     return sorted_files[:8]
 
 
+def context_fence(text, lang="text"):
+    """Preserve entire code/Markdown file even when it contains code fences."""
+    longest = max((len(match.group(0)) for match in re.finditer(r"~{3,}", text)), default=0)
+    fence = "~" * max(4, longest + 1)
+    return [fence + lang, text, fence]
+
+
 def build_prompt(r, n, branch=None, files=(), target=None):
     d = repo_dir(r)
     base = target or default_branch(d)
@@ -269,7 +276,7 @@ def build_prompt(r, n, branch=None, files=(), target=None):
     if branch:
         rng = f"origin/{base}...origin/{ref}"
         p += [f"## Diff utuh {ref} dibanding {base}",
-              "```diff", git(d, "diff", rng), "```", ""]
+              *context_fence(git(d, "diff", rng), "diff"), ""]
     selected = list(dict.fromkeys(files))
     auto_selected = not selected
     if auto_selected:
@@ -288,8 +295,8 @@ def build_prompt(r, n, branch=None, files=(), target=None):
     for file in selected:
         if not isinstance(file, str) or file not in tree:
             raise Err(f"File konteks tidak ditemukan dalam branch {ref}: {str(file)[:160]}", 409)
-        p += [f"## ISI UTUH {file}", "```",
-              git(d, "show", f"origin/{ref}:{file}"), "```", ""]
+        p += [f"## ISI UTUH {file}",
+              *context_fence(git(d, "show", f"origin/{ref}:{file}")), ""]
     p.append(FORMAT)
     result = "\n".join(p)
     if len(result) > MAX_PROMPT_CHARS:
