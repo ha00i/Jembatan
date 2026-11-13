@@ -243,6 +243,8 @@ class QAJobTests(unittest.TestCase):
             "issue": 19, "url": "https://example/issues/19",
             "prompt": "STATUS: SELESAI — lanjutkan perbaikan"
         })
+        self.app.issue_pr_status = lambda repo, n: {
+            "merged": True, "base": "main", "number": 23}
         with patch.object(qa.docker_control, "_app_settings", side_effect=mapping):
             with patch.object(qa.docker_control, "run_qa", return_value={
                 "ok": False, "source_branch": "main", "source_sha": "a" * 40,
@@ -275,6 +277,63 @@ class QAJobTests(unittest.TestCase):
                 qa.start(self.app, "ha00i/Jembatan", issue_number=19,
                          report_on_fail=True)
         self.assertFalse(qa.active())
+
+    def test_linked_issue_requires_merged_pr_before_final_qa(self):
+        self.app.gh = lambda path: {"number": 11, "state": "open"}
+        self.app.issue_pr_status = lambda repo, issue: {"merged": False}
+        with patch.object(qa.docker_control, "_app_settings", side_effect=mapping):
+            with patch.object(qa.docker_control, "run_qa") as tests:
+                with self.assertRaisesRegex(qa.docker_control.DockerError, "Merge dahulu"):
+                    qa.start(self.app, "ha00i/Jembatan", issue_number=11,
+                             report_on_fail=True)
+                tests.assert_not_called()
+        self.assertFalse(qa.active())
+
+    def test_wrong_branch_qa_final_is_failed_and_reported(self):
+        sha = "a" * 40
+        reports = []
+        self.app.gh = lambda path: (
+            {"number": 11, "state": "closed"} if path.endswith("/issues/11")
+            else {"commit": {"sha": sha}})
+        self.app.issue_pr_status = lambda repo, issue: {
+            "merged": True, "base": "release/v2", "number": 22}
+        self.app.report_qa_failure = lambda repo, issue, log, branch: (
+            reports.append((issue, log, branch)) or
+            {"issue": 11, "url": "https://example.test/issues/11",
+             "prompt": "Selesaikan semua error"})
+        with patch.object(qa.docker_control, "_app_settings", side_effect=mapping):
+            with patch.object(qa.docker_control, "run_qa", return_value={
+                "ok": True, "source_branch": "main",
+                "source_sha": sha, "source_verified": True}):
+                qa.start(self.app, "ha00i/Jembatan", issue_number=11,
+                         report_on_fail=True)
+                result = self.wait_done()
+        self.assertEqual(result["state"], "failed")
+        self.assertFalse(result["qa_verified"])
+        self.assertIn("release/v2", result["verify_reason"])
+        self.assertEqual(len(reports), 1)
+        self.assertEqual(reports[0][0], 11)
+        self.assertIn("QA FINAL FAIL", reports[0][1])
+        self.assertEqual(result["followup_prompt"], "Selesaikan semua error")
+
+    def test_final_qa_pass_requires_sha_on_merged_pr_target(self):
+        sha = "b" * 40
+        self.app.gh = lambda path: (
+            {"number": 11, "state": "open"} if path.endswith("/issues/11")
+            else {"commit": {"sha": sha}})
+        self.app.issue_pr_status = lambda repo, issue: {
+            "merged": True, "base": "release/v2", "number": 22}
+        with patch.object(qa.docker_control, "_app_settings", side_effect=mapping):
+            with patch.object(qa.docker_control, "run_qa", return_value={
+                "ok": True, "source_branch": "release/v2",
+                "source_sha": sha, "source_verified": True}):
+                qa.start(self.app, "ha00i/Jembatan", issue_number=11)
+                result = self.wait_done()
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["qa_verified"])
+        self.assertEqual(result["post_merge_branch"], "release/v2")
+        self.assertEqual(result["merged_pr_number"], 22)
+        self.assertIn("QA FINAL PASS", result["log"])
 
     def test_stdout_callback_receives_chunks_from_real_subprocess(self):
         chunks = []
