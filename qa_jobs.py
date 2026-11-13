@@ -27,8 +27,9 @@ def _sanitize(text, app):
     value = re.sub(r"(?im)(Authorization\s*:\s*(?:Bearer|Basic)\s+)\S+",
                    r"\1[REDACTED]", value)
     value = re.sub(r"(?i)(https?://)[^\s/@]+:[^\s/@]+@", r"\1[REDACTED]@", value)
-    value = re.sub(r"(?im)((?:password|secret|api[_-]?key|token)\s*[:=]\s*)\S+",
-                   r"\1[REDACTED]", value)
+    value = re.sub(
+        r"(?im)((?:[A-Z0-9_]*(?:PASSWORD|SECRET|API[_-]?KEY|TOKEN|PRIVATE_KEY|CREDENTIAL)[A-Z0-9_]*)\s*[:=]\s*)\S+",
+        r"\1[REDACTED]", value)
     return value
 
 
