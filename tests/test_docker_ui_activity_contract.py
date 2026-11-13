@@ -7,7 +7,8 @@ HTML = (Path(__file__).resolve().parents[1] / "index.html").read_text(encoding="
 
 class DockerActivityUIContract(unittest.TestCase):
     def test_qa_uses_real_api_and_indeterminate_activity(self):
-        self.assertIn("api('/api/docker/qa/start','POST',{repo})", HTML)
+        self.assertIn("api('/api/docker/qa/start','POST',", HTML)
+        self.assertIn("report_on_fail:$('#docker-report-on-fail').checked", HTML)
         self.assertIn('class="progress-track" role="progressbar"', HTML)
         self.assertIn("tanpa informasi persentase", HTML)
         self.assertIn("durationLabel(", HTML)
@@ -84,6 +85,29 @@ class DockerActivityUIContract(unittest.TestCase):
     def test_qa_help_does_not_claim_automatic_checkout_switching(self):
         self.assertIn("checkout QA harus sudah berada di branch tersebut", HTML)
         self.assertIn("Jika berbeda branch, deploy hanya diizinkan bila SHA commit sama", HTML)
+
+    def test_pr_target_and_manual_qa_issue_loop_are_present(self):
+        self.assertIn("Branch tujuan PR / merge", HTML)
+        self.assertIn("data-act=\"merge-pr\"", HTML)
+        self.assertIn("data-act=\"pr-status\"", HTML)
+        self.assertIn("data-act=\"qa-pass\"", HTML)
+        self.assertIn("data-act=\"qa-fail\"", HTML)
+        self.assertIn("/api/pr/merge", HTML)
+        self.assertIn("/api/qa/failure", HTML)
+        self.assertIn("/api/qa/pass", HTML)
+
+    def test_qa_issue_tracking_and_fix_prompt_copy(self):
+        self.assertIn('id="docker-qa-issue"', HTML)
+        self.assertIn('id="docker-report-on-fail"', HTML)
+        self.assertIn('id="docker-qa-follow-prompt"', HTML)
+        self.assertIn("data-docker=\"copy-qa-prompt\"", HTML)
+        self.assertIn("job?.followup_prompt", HTML)
+        self.assertIn("Issue QA #", HTML)
+
+    def test_full_prompt_and_target_are_sent_to_backend(self):
+        self.assertIn("Buat prompt LENGKAP untuk ChatGPT", HTML)
+        self.assertIn("api('/api/prompt','POST'", HTML)
+        self.assertIn("const target=q('[data-pr-target]').value", HTML)
 
     def test_toasts_are_actionable_and_accessible(self):
         self.assertIn('id="toast-stack" aria-label="Notifikasi aktivitas"', HTML)
