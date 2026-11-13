@@ -151,10 +151,10 @@ class QAFeedbackContract(TestCase):
             if args[0] == "rev-parse":
                 return head
             if args[0] == "ls-tree":
-                return "app/login.py\\nREADME.md"
+                return "app/login.py\nREADME.md"
             if args[0] == "show":
                 self.assertEqual(args[1], "origin/main:app/login.py")
-                return "def login():\\n    return False\\n"
+                return "def login():\n    return False\n"
             raise AssertionError(args)
         with patch.object(bridge, "default_branch", return_value="main"):
             with patch.object(bridge, "git", side_effect=fake_git):
@@ -167,7 +167,7 @@ class QAFeedbackContract(TestCase):
         self.assertIn("def login():", prompt)
         self.assertIn("FAIL app/login.py", prompt)
         self.assertIn("STATUS: SELESAI", prompt)
-        self.assertNotIn("README.md\\n~~~~text", prompt)
+        self.assertNotIn("README.md\n~~~~text", prompt)
 
     def test_repair_prompt_marks_stale_or_missing_source_explicitly(self):
         issue = {"number": 11, "title": "Regression", "body": "Bug main.py"}
