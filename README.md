@@ -56,7 +56,7 @@ Pada Docker & QA kamu bisa:
 - Klik **Simpan koneksi**, **Tes koneksi**, **Lihat container**.
 - Pilih repository, mapping **container QA** + **profil tes tetap** + **path Compose** aplikasi; klik **Run QA** atau **Deploy** setelah konfirmasi.
 - QA tidak boleh memakai container production; backend hanya menerima container yang namanya menunjukkan QA, running, non-privileged, dan bukan host-network. Pastikan database/volume juga memang terpisah.
-- Deployment hanya pada path mapping dan branch target (main/staging) yang telah disetujui.
+- Deployment hanya pada path mapping dan branch GitHub yang dipilih secara eksplisit.
 - **Satu issue → satu branch tetap** `bridge/issue-N`, PR terbuka dipakai kembali, issue closed tersembunyi kecuali dibuka.
 - Untuk branch lama yang sudah merged: klik **Hapus** pada branch atau **Hapus semua branch aman**. Dialog konfirmasi sekarang cukup **Hapus / Batal**, tanpa mengetik; SHA, proteksi branch, dan bukti merge tetap diperiksa ulang oleh backend.
 
@@ -100,18 +100,14 @@ python3 -m py_compile bridge.py docker_control.py qa_jobs.py
 
 ### Branch deploy mengikuti yang tersedia di GitHub
 
-- Pilihan **main/staging** dibaca langsung dari repository GitHub yang dipilih.
-  Branch yang tidak ada tidak dapat disimpan sebagai target baru.
-- Jika sebelumnya tersimpan `staging` tetapi branch itu telah dihapus,
-  Jembatan menampilkan `staging (tidak ditemukan)`, alasan deploy terblokir,
-  dan opsi nyata yang ada di GitHub. Pilih target yang benar secara eksplisit,
-  lalu **Simpan aplikasi**. Tidak ada pengalihan otomatis ke main.
-- API `GET /api/deploy/branches?repo=owner/name` mengembalikan branch
-  main/staging yang tersedia, `default_branch` dan status pengaturan lama.
-  `GET /api/deploy/readiness` mengembalikan status tidak siap jika target
-  sudah hilang, tanpa menampilkan raw GitHub 404.
-- Jika repository tidak memiliki `main` maupun `staging`, deployment ditahan
-  karena belum ada target yang didukung.
+- Pilihan branch deploy memuat **branch GitHub yang benar-benar tersedia**,
+  termasuk `main`, `staging`, `develop`, `release/...`, atau `feature/...`.
+- Jika branch yang tersimpan sudah hilang, Jembatan menandainya
+  **tidak ditemukan**, memblokir deploy, dan meminta pilihan baru serta
+  **Simpan aplikasi**. Tidak ada pengalihan diam-diam ke `main`.
+- API `GET /api/deploy/branches?repo=owner/name` mengembalikan daftar branch
+  valid dan `default_branch` dari GitHub. Jika belum ada branch valid,
+  deployment tetap ditahan.
 
 ### Pilihan branch QA dan deploy terpisah
 
@@ -171,8 +167,9 @@ serta bukti yang digunakan:
 - **Perlu ditinjau:** sudah terdeteksi di branch lain seperti `staging` tetapi belum di default branch.
 - **Belum tergabung / dilindungi / aktif:** tombol hapus dinonaktifkan.
 
-Tombol **Hapus** meminta pengetikan ulang nama branch. Backend kemudian melakukan
-`git fetch`, mengulang semua pemeriksaan GitHub, dan hanya menghapus remote branch
+Tombol **Hapus** memakai dialog dua tombol **Hapus / Batal**, tanpa pengetikan.
+Backend kemudian melakukan `git fetch`, mengulang semua pemeriksaan GitHub,
+dan hanya menghapus remote branch
 bila SHA-nya **tidak berubah** menggunakan `git push --force-with-lease`.
 Branch default tidak dapat dihapus. Branch lokal yang mungkin masih ada tidak ikut dihapus.
 Jika branch sudah berubah, masih dipakai PR terbuka, atau ada aturan proteksi,
