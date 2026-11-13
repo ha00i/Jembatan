@@ -12,15 +12,37 @@ class QARoutesTests(unittest.TestCase):
                 with self.assertRaisesRegex(bridge.Err, "tidak valid"):
                     bridge.repo_dir(repo)
 
-    def test_available_deploy_branches_only_shows_real_main_staging(self):
+    def test_available_deploy_branches_includes_valid_feature_branches(self):
         fake = [{"name": "main"}, {"name": "feature"}, {"name": "dev"}]
         with patch.object(bridge, "gh", return_value={"default_branch": "main"}):
             with patch.object(bridge, "gh_pages", return_value=fake):
                 with patch.object(bridge, "docker_action", return_value={"deploy_branch": "staging"}):
                     result = bridge.deploy_branch_options("ha00i/Jembatan")
-        self.assertEqual(result["available"], ["main"])
+        self.assertEqual(result["available"], ["main", "dev", "feature"])
         self.assertEqual(result["configured"], "staging")
         self.assertFalse(result["configured_exists"])
+
+    def test_deployment_target_encodes_feature_branch_in_github_api(self):
+        sha = "a" * 40
+        with patch.object(bridge, "docker_action", return_value={
+                "deploy_branch": "release/v2", "deploy_path": "/srv/app"}):
+            with patch.object(bridge, "gh", return_value={"commit": {"sha": sha}}) as github:
+                branch, result_sha, settings = bridge.deployment_target("ha00i/Jembatan")
+        self.assertEqual(branch, "release/v2")
+        self.assertEqual(result_sha, sha)
+        github.assert_called_once_with("/repos/ha00i/Jembatan/branches/release%2Fv2")
+
+    def test_save_app_accepts_feature_deploy_branch_independent_from_qa(self):
+        with patch.object(bridge, "deploy_branch_options",
+                          return_value={"available": ["main", "release/v2"]}):
+            with patch.object(bridge, "docker_action",
+                              return_value={"deploy_branch": "release/v2",
+                                            "qa_branch_mode": "active"}) as docker:
+                result = bridge.save_docker_app({
+                    "repo": "ha00i/Jembatan", "deploy_branch": "release/v2",
+                    "qa_branch_mode": "active"})
+        self.assertEqual(result["qa_branch_mode"], "active")
+        self.assertIs(docker.call_args.args[0], bridge.docker_control.save_app)
 
     def test_stale_branch_must_not_be_silently_replaced(self):
         settings = {"deploy_branch": "staging", "deploy_path": "/srv/app"}
