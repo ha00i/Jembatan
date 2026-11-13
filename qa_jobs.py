@@ -166,7 +166,7 @@ def _runner(app, job):
             try:
                 result = app.report_qa_failure(
                     job["repo"], job.get("issue_number"), job["log"],
-                    job.get("qa_branch"))
+                    job.get("post_merge_branch") or job.get("qa_branch"))
                 with _LOCK:
                     job["issue_number"] = result["issue"]
                     job["report_issue_url"] = result["url"]
