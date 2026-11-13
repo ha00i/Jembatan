@@ -569,7 +569,7 @@ function row(i){
     <div class="row"><select data-br aria-label="Branch konteks prompt"><option value="">Branch default (konteks prompt)</option>${opts}</select><input data-files placeholder="File konteks lengkap, pisahkan koma"></div>
     <label>Branch tujuan PR / merge<select data-pr-target aria-label="Branch tujuan PR">${prTargetNames().map(name=>'<option value="'+esc(name)+'">'+esc(name)+'</option>').join('')}</select></label>
     <div><button class="go" data-act="prompt">Buat prompt LENGKAP untuk ChatGPT</button></div>
-    <div data-p hidden><textarea rows="8" readonly data-prompt></textarea><button data-act="copy" data-sel="[data-prompt]">Salin prompt</button></div>
+    <div data-p hidden><p class="docker-caption" data-prompt-files></p><textarea rows="8" readonly data-prompt></textarea><button data-act="copy" data-sel="[data-prompt]">Salin prompt</button></div>
     <label>Balasan ChatGPT<textarea rows="6" data-reply placeholder="Tempel balasan lengkap, termasuk blok diff"></textarea></label>
     <div><button class="go" data-act="apply">Terapkan patch</button></div>
     <pre data-res hidden></pre>
@@ -826,8 +826,12 @@ $('#view').onclick=async e=>{
     const target=q('[data-pr-target]').value;
     const r=await run('Menyusun prompt lengkap',()=>api('/api/prompt','POST',
       {repo,issue:n,branch:q('[data-br]').value,files,target}));
-    if(r){q('[data-p]').hidden=false;const t=q('[data-prompt]');t.value=r.prompt;copy(t);
-      note('Prompt lengkap ('+r.chars+' karakter) disalin. ChatGPT wajib menjawab STATUS: SELESAI tanpa kekurangan.')}return;
+    if(r){q('[data-p]').hidden=false;const t=q('[data-prompt]');t.value=r.prompt;
+      q('[data-prompt-files]').textContent=(r.auto_context?'Konteks otomatis':'Konteks dipilih')+
+        ': '+(r.files_included||[]).join(', ');
+      copy(t);
+      note('Prompt lengkap ('+r.chars+' karakter, '+(r.files_included||[]).length+
+        ' file utuh) disalin. Balasan harus STATUS: SELESAI tanpa kekurangan.')}return;
   }
   if(act==='apply'){
     const target=q('[data-pr-target]').value;
