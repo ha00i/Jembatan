@@ -136,6 +136,49 @@ class QAFeedbackContract(TestCase):
         rp.start()
         self.addCleanup(rp.stop)
 
+    def test_repair_prompt_includes_full_verified_source_and_error(self):
+        issue = {"number": 11, "title": "Login error",
+                 "body": "Perbaiki app/login.py serta test login"}
+        head = "a" * 40
+        def fake_git(d, *args, **kwargs):
+            if args[0] == "rev-parse":
+                return head
+            if args[0] == "ls-tree":
+                return "app/login.py\\nREADME.md"
+            if args[0] == "show":
+                self.assertEqual(args[1], "origin/main:app/login.py")
+                return "def login():\\n    return False\\n"
+            raise AssertionError(args)
+        with patch.object(bridge, "default_branch", return_value="main"):
+            with patch.object(bridge, "git", side_effect=fake_git):
+                with patch.object(bridge, "gh",
+                                  return_value={"commit": {"sha": head}}):
+                    prompt = bridge.qa_followup_prompt(
+                        "ha00i/Jembatan", issue,
+                        "FAIL app/login.py test_login", "main")
+        self.assertIn("SOURCE UTUH app/login.py", prompt)
+        self.assertIn("def login():", prompt)
+        self.assertIn("FAIL app/login.py", prompt)
+        self.assertIn("STATUS: SELESAI", prompt)
+        self.assertNotIn("README.md\\n~~~~text", prompt)
+
+    def test_repair_prompt_marks_stale_or_missing_source_explicitly(self):
+        issue = {"number": 11, "title": "Regression", "body": "Bug main.py"}
+        with patch.object(bridge, "default_branch", return_value="main"):
+            with patch.object(bridge, "git", side_effect=bridge.Err("not synced")):
+                prompt = bridge.qa_followup_prompt(
+                    "ha00i/Jembatan", issue, "FAIL main.py", "main")
+        self.assertIn("Konteks source belum tersedia:", prompt)
+        self.assertIn("BUTUH FILE:", prompt)
+        self.assertNotIn("SOURCE UTUH main.py", prompt)
+
+    def test_repair_prompt_refuses_oversize_instead_of_silent_truncation(self):
+        issue = {"number": 11, "title": "Big issue", "body": "Y" * 128000}
+        with patch.object(bridge, "qa_followup_source_context",
+                          return_value=("Belum ada snapshot", ["source kurang"])):
+            with self.assertRaisesRegex(bridge.Err, "melebihi batas aman"):
+                bridge.qa_followup_prompt("ha00i/Jembatan", issue, "FAIL", "main")
+
     def test_closed_issue_reopens_with_error_and_complete_prompt(self):
         closed = {"number": 11, "state": "closed", "title": "Full issue",
                   "body": "Fitur A, B dan C", "html_url": "https://example/issues/11"}
