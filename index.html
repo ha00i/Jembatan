@@ -860,6 +860,13 @@ function renderDeployBranchChoices(){
   const repo=S.repo,info=S.deployBranches?.repo===repo?S.deployBranches:null;
   const current=S.dockerCfg?.app?.deploy_branch||'main';
   const hint=$('#docker-branch-hint');
+  const qaHint=$('#docker-qa-source-hint'),qaMode=$('#docker-qa-branch-mode')?.value||'active';
+  if(qaHint&&info){
+    qaHint.textContent=qaMode==='default'?
+      'Default GitHub: '+(info.default_branch||'belum diketahui')+
+      '. Container QA harus sudah checkout branch itu. Simpan aplikasi sebelum Run QA.':
+      'QA memakai branch aktif di checkout container QA, bukan branch deploy.';
+  }
   if(!repo||!info){
     select.innerHTML='<option value="">Memeriksa branch GitHub...</option>';
     select.disabled=true;
@@ -983,9 +990,10 @@ $('#docker-view').onchange=e=>{
   if(e.target&&e.target.id==='docker-mode')$('#docker-ssh-fields').hidden=e.target.value!=='ssh';
   if(e.target&&e.target.id==='docker-qa-branch-mode'){
     const hint=$('#docker-qa-source-hint');
+    const defaultBranch=S.deployBranches?.default_branch||'belum diketahui';
     if(hint)hint.textContent=(e.target.value==='default'?
-      'QA menggunakan default branch GitHub. Container QA harus sudah checkout branch tersebut.':
-      'QA menggunakan branch aktif dari checkout container QA.')+
+      'QA memakai default GitHub: '+defaultBranch+'. Container QA harus sudah checkout branch itu.':
+      'QA memakai branch aktif dari checkout container QA, bukan branch deploy.')+
       ' Klik Simpan aplikasi sebelum Run QA.';
   }
   if(e.target&&e.target.id==='docker-deploy-branch'){
