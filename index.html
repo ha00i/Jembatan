@@ -532,7 +532,7 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const ST={none:['Belum ada pekerjaan',1],ready:['Commit ditemukan · perlu validasi QA',2],merged_open:['Terindikasi di main · issue masih terbuka',3],done:['Issue ditutup · verifikasi QA terpisah',4]};
+const ST={none:['Belum ada pekerjaan',1],ready:['Commit ditemukan · perlu validasi QA',2],merged_open:['Diduga tergabung · issue terbuka',3],done:['Issue ditutup · verifikasi QA terpisah',4]};
 let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},prMerges:{},promptPacks:{},qaIssueNumber:null,filter:'all',issueQuery:'',issuePage:0,repoPanel:'issues',listFocus:false,selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0,page:'repos',showClosed:true,dockerCfg:null,dockerContainers:[]};
 $('#tok').value=tok;
 
@@ -656,7 +656,7 @@ function drawMain(){
    <div class="head"><h2>${esc(d.repo)} <span class="mute">(utama: ${esc(d.base)})</span></h2>
     <div class="row"><button data-act="toggle-list-focus" aria-pressed="${!!S.listFocus}">${S.listFocus?'Tampilkan ringkasan':'Fokus daftar'}</button><button data-act="reload">Muat ulang</button><button data-act="open-docker">Docker & QA</button></div></div>
    <p class="context-note">Status diperoleh dari riwayat Git dan GitHub; bukan bukti QA atau persetujuan merge.</p><pre id="deploy-out" hidden></pre>
-   <div class="metrics"><div class="metric"><span class="marker"></span><span class="value">${cnt('none')}</span><span class="meta">Belum ditangani</span></div><div class="metric review"><span class="marker"></span><span class="value">${cnt('ready')}</span><span class="meta">Perlu validasi</span></div><div class="metric merged"><span class="marker"></span><span class="value">${cnt('merged_open')}</span><span class="meta">Diduga sudah di main</span></div><div class="metric done"><span class="marker"></span><span class="value">${cnt('done')}</span><span class="meta">Issue ditutup</span></div></div>
+   <div class="metrics"><div class="metric"><span class="marker"></span><span class="value">${cnt('none')}</span><span class="meta">Belum ditangani</span></div><div class="metric review"><span class="marker"></span><span class="value">${cnt('ready')}</span><span class="meta">Perlu validasi</span></div><div class="metric merged"><span class="marker"></span><span class="value">${cnt('merged_open')}</span><span class="meta">Diduga masuk ${esc(d.base)}</span></div><div class="metric done"><span class="marker"></span><span class="value">${cnt('done')}</span><span class="meta">Issue ditutup</span></div></div>
    <div class="workspace-switch" role="group" aria-label="Panel repository">
      <button type="button" data-act="workspace-issues" aria-pressed="${S.repoPanel!=='branches'}">Daftar issue <span class="switch-count">${d.issues.length}</span></button>
      <button type="button" data-act="workspace-branches" aria-pressed="${S.repoPanel==='branches'}">Manajemen branch <span class="switch-count">${S.branchData?.branches?.length??'…'}</span></button>
