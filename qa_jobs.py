@@ -47,7 +47,9 @@ def _public(job, app):
         "elapsed_seconds": int(max(0, (job["finished_at"] or now) - job["started_at"])),
         "exit_code": job["exit_code"], "ok": job["ok"],
         "log": _sanitize(job["log"], app), "truncated": job["truncated"],
-        "target_branch": job.get("target_branch", "main"),
+        "qa_branch_mode": job.get("qa_branch_mode", "active"),
+        "qa_branch": job.get("qa_branch"),
+        "target_branch": job.get("qa_branch"),
         "source_sha": job.get("source_sha"), "qa_verified": job.get("qa_verified", False),
         "verify_reason": job.get("verify_reason", "Belum ada bukti SHA"),
     }}
@@ -74,29 +76,47 @@ def _runner(app, job):
                     job["updated_at"] = time.time()
             elif kind == "output":
                 report(text)
-        branch = job["target_branch"]
-        expected_sha = None
-        target_reason = "GitHub branch belum diverifikasi"
-        try:
-            remote = app.gh(f"/repos/{job['repo']}/branches/{branch}")
-            expected_sha = remote["commit"]["sha"]
-            if not re.fullmatch(r"[a-fA-F0-9]{40}", expected_sha):
-                expected_sha = None
-            if expected_sha:
-                target_reason = "Bukti SHA GitHub tersedia"
-        except Exception:
-            target_reason = "GitHub branch tidak dapat dibaca saat QA"
-        report(f"[Jembatan] Target deploy: {branch} ({expected_sha[:12] if expected_sha else 'belum diketahui'})\n")
-        result = docker_control.run_qa(app, job["repo"], on_event=on_event)
+        mode = job["qa_branch_mode"]
+        required_branch = None
+        if mode == "default":
+            meta = app.gh(f"/repos/{job['repo']}")
+            required_branch = meta.get("default_branch")
+            if not docker_control.valid_branch(required_branch):
+                raise docker_control.DockerError("Default branch GitHub tidak valid", 409)
+        report("[Jembatan] Sumber QA: " + mode +
+               ((" (" + required_branch + ")") if required_branch else " (branch checkout aktif)") + "\n")
+        result = docker_control.run_qa(app, job["repo"], on_event=on_event,
+                                       branch_mode=mode, required_branch=required_branch)
+        source_branch = result.get("source_branch")
         source_sha = result.get("source_sha")
-        verified = bool(result["ok"] and expected_sha and
+        branch_matches_mode = (docker_control.valid_branch(source_branch) and
+                               (mode == "active" or source_branch == required_branch))
+        expected_sha = None
+        source_reason = result.get("source_reason") or "Bukti checkout QA tidak tersedia"
+        if branch_matches_mode:
+            try:
+                from urllib.parse import quote
+                remote = app.gh(f"/repos/{job['repo']}/branches/{quote(source_branch, safe='')}")
+                expected_sha = (remote.get("commit") or {}).get("sha")
+                if not isinstance(expected_sha, str) or not re.fullmatch(r"[a-fA-F0-9]{40}", expected_sha):
+                    expected_sha = None
+            except Exception:
+                expected_sha = None
+        verified = bool(result["ok"] and expected_sha and branch_matches_mode and
                         result.get("source_verified") and source_sha == expected_sha)
-        reason = ("SHA QA sama dengan branch GitHub pada awal tes" if verified else
-                  result.get("source_reason") or target_reason or "SHA QA belum terverifikasi")
-        if not verified and result["ok"] and source_sha and expected_sha and source_sha != expected_sha:
-            reason = "SHA container QA berbeda dari branch target"
+        if verified:
+            reason = "QA " + source_branch + " PASS pada SHA GitHub " + source_sha[:12]
+        elif result["ok"] and expected_sha and source_sha and source_sha != expected_sha:
+            reason = "SHA checkout QA tidak cocok dengan branch GitHub " + source_branch
+        elif result["ok"] and not expected_sha and branch_matches_mode:
+            reason = "SHA branch QA tidak dapat diverifikasi terhadap GitHub"
+        else:
+            reason = source_reason
+        report(f"[Jembatan] Branch QA: {source_branch or 'belum diketahui'}" +
+               (f" · GitHub SHA {expected_sha[:12]}" if expected_sha else "") + "\n")
         with _LOCK:
             job["source_sha"] = source_sha
+            job["qa_branch"] = source_branch if branch_matches_mode else None
             job["qa_verified"] = verified
             job["verify_reason"] = reason
             job["ok"] = result["ok"]
@@ -133,8 +153,11 @@ def start(app, repo):
             raise docker_control.DockerError("QA masih berjalan" + (f" untuk {busy['repo']}" if busy else "") + ". Tunggu hingga selesai.", 409)
         identifier = uuid.uuid4().hex
         now = time.time()
+        mode = mapping.get("qa_branch_mode", "active")
+        if mode not in ("active", "default"):
+            raise docker_control.DockerError("Sumber branch QA tidak valid", 409)
         job = dict(id=identifier, repo=repo, container=mapping["qa_container"],
-                   profile=mapping["qa_profile"], target_branch=mapping.get("deploy_branch", "main"),
+                   profile=mapping["qa_profile"], qa_branch_mode=mode, qa_branch=None,
                    source_sha=None, qa_verified=False, verify_reason="Menunggu pemeriksaan",
                    state="queued", stage="Menyiapkan QA",
                    started_at=now, updated_at=now, finished_at=None,
@@ -165,7 +188,9 @@ def active():
 
 
 def require_verified(app, repo, branch, sha):
-    """Fail-closed merge gate for Docker deploy. Only exact QA-run branch/SHA passes."""
+    """Deploy may use another branch, but only if its exact commit was tested."""
+    if not docker_control.valid_branch(branch):
+        raise docker_control.DockerError("Branch target deployment tidak valid", 409)
     if not isinstance(sha, str) or not re.fullmatch(r"[a-fA-F0-9]{40}", sha):
         raise docker_control.DockerError("SHA target deployment tidak valid", 409)
     mapping = docker_control._app_settings(app, repo)
@@ -174,13 +199,19 @@ def require_verified(app, repo, branch, sha):
         valid = bool(record and record.get("state") == "passed" and
                      record.get("qa_verified") is True and
                      record.get("source_sha") == sha and
-                     record.get("target_branch") == branch and
                      record.get("container") == mapping.get("qa_container") and
-                     record.get("profile") == mapping.get("qa_profile"))
+                     record.get("profile") == mapping.get("qa_profile") and
+                     record.get("qa_branch_mode") == mapping.get("qa_branch_mode", "active"))
         if valid:
-            return {"sha": sha, "branch": branch, "qa_job_id": record["id"]}
+            return {"sha": sha, "branch": branch, "qa_branch": record.get("qa_branch"),
+                    "qa_job_id": record["id"]}
         detail = record.get("verify_reason") if record else "Belum ada hasil QA"
+        qa_branch = record.get("qa_branch") if record else None
+        qa_sha = record.get("source_sha") if record else None
+    if qa_branch and qa_sha and qa_sha != sha:
+        detail = ("QA terakhir pada branch " + qa_branch + " (" + qa_sha[:12] +
+                  "), tetapi branch deploy " + branch + " memerlukan " + sha[:12] +
+                  ". Jalankan QA pada checkout commit yang sama.")
     raise docker_control.DockerError(
-        "Deploy diblokir: QA PASS terverifikasi untuk commit " + sha[:12] +
-        " pada branch " + branch + " belum tersedia. " + detail +
-        ". Jalankan QA pada checkout SHA yang sama.", 409)
+        "Deploy diblokir: belum ada QA PASS terverifikasi untuk SHA " + sha[:12] +
+        " pada target " + branch + ". " + detail, 409)
