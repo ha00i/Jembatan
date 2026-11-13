@@ -20,13 +20,21 @@ class PromptMultipartUIContract(unittest.TestCase):
 
     def test_next_step_copies_selected_full_part(self):
         self.assertIn("renderPromptPack(box,record)", HTML)
-        self.assertIn("if(step>0)copy(q('[data-prompt]'))", HTML)
+        self.assertIn("const copied=await copy(q('[data-prompt]'))", HTML)
+        self.assertIn("if(!copied)notify(", HTML)
+        self.assertIn("Clipboard tidak tersedia.", HTML)
         self.assertIn("find('[data-prompt]').value=record.parts[record.index]", HTML)
 
     def test_manual_chatgpt_receives_final_only_instruction(self):
         self.assertIn("Tempel setiap bagian secara berurutan dalam SATU percakapan ChatGPT.", HTML)
         self.assertIn("Jangan meminta ChatGPT mulai mengerjakan sebelum bagian terakhir.", HTML)
         self.assertIn("BAGIAN TERAKHIR: sesudah ditempel", HTML)
+
+    def test_clipboard_fallback_awaits_and_reports_failures(self):
+        self.assertIn("async function copy(el)", HTML)
+        self.assertIn("await navigator.clipboard.writeText(el.value)", HTML)
+        self.assertIn("document.execCommand('copy')===true", HTML)
+        self.assertIn("Bagian sudah ditampilkan, tetapi belum tersalin", HTML)
 
     def test_single_part_stays_compatible(self):
         self.assertIn("r.parts:[r.prompt].filter(Boolean)", HTML)
