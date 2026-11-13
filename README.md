@@ -26,27 +26,52 @@ Alat bantu ChatGPT dan GitHub di servermu. Tanpa API berbayar: kamu yang menempe
 chat ChatGPT dan menempel balasannya kembali. Sisanya otomatis.
 
 ## Menjalankan
-1. Buat token GitHub (fine-grained, repo yang dipilih): Contents (baca/tulis), Issues (baca),
+1. Buat token GitHub (fine-grained, repo yang dipilih): Contents (baca/tulis), Issues (baca/tulis),
    Pull requests (baca/tulis), Metadata (baca). Token classic: centang `repo`.
 2. `cp .env.example .env`, isi `GITHUB_TOKEN`. Disarankan mengisi `ADMIN_TOKEN` terpisah untuk login web UI. Jika kosong, secara kompatibilitas lama UI memakai `GITHUB_TOKEN`.
 3. Tanpa Docker: `export $(cat .env | xargs) && python3 bridge.py` lalu buka http://192.168.1.2:5111 (atau http://localhost:5111 dari server itu sendiri)
    Dengan Docker: `mkdir -p /srv/jembatan/repos && docker compose up -d --build`
 
-## Alur
-1. Centang repo (atau Pilih semua) lalu Sinkron. Bot meng-clone atau fetch semua branch.
-2. Pilih repo. Tiap issue dibandingkan dengan branch dan commit, lalu diberi tahap:
-   belum ada pekerjaan, ada commit di branch, sudah masuk tapi issue terbuka, selesai.
-   Ini tebakan dari nama branch, pesan commit (`#12`), dan status issue. Bukan pengganti review.
-3. Buka issue, Buat prompt untuk ChatGPT, tempel ke chat. Balasan berformat
-   STATUS / KEKURANGAN / PATCH.
-4. Tempel balasan, Terapkan patch. Patch masuk ke branch baru `bridge/issue-N-...`.
-   Jalankan QA secara terpisah melalui menu Docker & QA; tes tidak otomatis pada production.
-   Jika patch tidak cocok dengan kode terbaru (misalnya `git apply gagal: patch failed: ...php:165`),
-   Jembatan akan menampilkan **notifikasi peringatan di pojok kanan bawah**. Notifikasi memuat
-   lokasi konflik, panel detail error, tombol **Salin detail** untuk dikirim ke ChatGPT,
-   serta tombol tutup. Notifikasi tetap tampil sampai pengguna menutupnya.
-5. Push dan buat PR. Setelah ditinjau, pakai perintah merge yang ditampilkan.
-6. Deploy hanya dari **folder Compose yang dipetakan untuk repository**, setelah konfirmasi nama repo; jangan jalankan deploy ke semua container.
+## Alur selesai: prompt → patch → PR → merge → QA → issue
+
+1. Sinkronkan repository lalu pilih issue. Atur **Branch tujuan PR / merge**
+   dari branch GitHub yang aktif/tersedia. Pilihan ini independen dari sumber
+   branch QA maupun branch deploy.
+2. Klik **Buat prompt LENGKAP untuk ChatGPT**. Jembatan menyertakan seluruh
+   isi issue, daftar file dan file konteks yang dipilih, tanpa memotong diam-diam.
+   Jika melebihi batas **125.000 karakter**, pembuatan prompt ditolak dengan
+   pesan jelas agar file konteks dikurangi, bukan dikirim sebagian.
+3. Tempel prompt ke ChatGPT. Jawaban wajib **STATUS: SELESAI**,
+   **KEKURANGAN: - tidak ada**, dan satu blok unified diff lengkap.
+   Jawaban **SEBAGIAN/BELUM**, membutuhkan file, atau diff belum lengkap
+   ditolak sebelum membuat/mengubah branch. Pemeriksaan ini bersifat struktural,
+   bukan jaminan bahwa model berhasil memenuhi setiap acceptance criterion.
+4. Klik **Terapkan patch**. Jembatan memakai satu branch kerja tetap
+   `bridge/issue-N`, dibuat dari branch tujuan yang dipilih jika baru.
+   Tidak menjalankan tes produksi otomatis pada tahap ini.
+5. Klik **Push dan buat PR** ke branch tujuan yang dipilih. PR yang masih
+   terbuka dapat digunakan kembali. Klik **Periksa / lanjutkan PR** untuk
+   memulihkan status setelah halaman di-refresh.
+6. Tinjau diff dan klik **Merge PR ke branch tujuan**. Merge hanya setelah
+   persetujuan eksplisit dan pengecekan SHA PR. GitHub dapat menolak
+   konflik, proteksi branch, atau check yang belum lolos. Jembatan **tidak**
+   otomatis menutup issue saat merge.
+7. **QA menjadi tahap manual terakhir.** Buka **Docker & QA**, pilih issue
+   terkait atau gunakan satu issue tracker QA, lalu Run QA. Jika opsi
+   **Laporkan QA gagal otomatis ke GitHub** dicentang, kegagalan akan
+   membuka ulang issue closed terkait atau memakai kembali satu issue QA,
+   mencantumkan log yang disanitasi dan prompt perbaikan yang bisa disalin.
+   Jika QA dilakukan di terminal, tempel log FAIL di kartu issue lalu klik
+   **QA FAIL — laporkan & buat prompt**.
+8. Jika QA **PASS** dan PR sudah merged, klik **QA PASS — Selesaikan issue**
+   pada kartu issue untuk menutupnya. Ini konfirmasi QA manual, bukan bukti
+   tes otomatis. Jika gagal, salin prompt tindak lanjut dari issue, ulangi
+   perbaikan di branch tetap yang sama, dan verifikasi lagi.
+
+**Keamanan:** log QA yang dikirim GitHub mengikuti visibilitas repository.
+Filter menyamarkan token umum, tetapi tidak bisa menjamin semua rahasia
+terdeteksi. Jangan mencetak atau menempel credential, token, atau data
+production ke log. QA tetap harus terpisah dari database/volume production.
 
 ## Docker & QA — alur sederhana (fitur baru)
 
