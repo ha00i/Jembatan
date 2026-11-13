@@ -47,8 +47,11 @@ chat ChatGPT dan menempel balasannya kembali. Sisanya otomatis.
   bukan hanya halaman saat ini.
 - Di setiap kartu, tekan **Baca deskripsi lengkap dan komentar**. Jembatan
   memuat body GitHub penuh saat diminta, tanpa menghapus baris atau
-  acceptance criteria. Komentar juga dapat dibaca hingga seluruh halaman
-  selesai melalui tombol **Muat komentar berikutnya**.
+  acceptance criteria. **Deskripsi dan komentar dibaca dalam panel scroll
+  internal** (maksimal 640 px pada desktop, 440 px pada layar kecil) sehingga
+  halaman issue tetap memiliki scroll utamanya. Panel bisa difokuskan dengan
+  keyboard, digulir dengan roda mouse/touchpad atau sentuhan. Komentar dibaca
+  hingga seluruh halaman melalui tombol **Muat komentar berikutnya**.
 - Endpoint pembacaan: `GET /api/overview?repo=owner/repo` dan
   `GET /api/issue/detail?repo=owner/repo&issue=N&comments_page=1`.
   Pembacaan ini tidak mengubah issue/PR dan membutuhkan token akses Jembatan.
