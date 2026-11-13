@@ -329,6 +329,11 @@ def require_complete_reply(reply):
     section = re.search(r"(?ims)^KEKURANGAN:\s*\n(.*?)(?=^[A-Z][A-Z ]+:|\Z)", reply)
     if not section or not re.fullmatch(r"\s*-\s*tidak ada\s*", section.group(1), re.I):
         raise Err("Masih ada KEKURANGAN; patch sebagian tidak diterapkan.", 409)
+    for heading in ("PERUBAHAN", "VERIFIKASI", "PATCH"):
+        section = re.search(
+            r"(?ims)^" + heading + r":[ \t]*\n(.*?)(?=^[A-Z][A-Z ]+:|\Z)", reply)
+        if not section or not section.group(1).strip():
+            raise Err("Balasan belum memuat bagian " + heading + " yang lengkap.", 409)
     if "```diff" not in reply or not re.search(r"(?ms)^```diff[ \t]*\n.+?\n```", reply):
         raise Err("Blok diff lengkap belum ditemukan atau belum ditutup.", 409)
 
