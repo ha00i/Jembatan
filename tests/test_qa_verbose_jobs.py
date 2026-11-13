@@ -98,6 +98,16 @@ class QAJobTests(unittest.TestCase):
         self.assertEqual(result["state"], "failed")
         self.assertIn("simulated worker error", result["log"])
 
+    def test_qa_issue_logs_hide_credentials_before_publication(self):
+        value = qa._sanitize(
+            "Authorization: Bearer secretJWT\n"
+            "AWS_SECRET_ACCESS_KEY=abc1234\n"
+            "https://username:password123@example.com/private\n"
+            "CI_JOB_TOKEN=tokenvalue", self.app)
+        for secret in ("secretJWT", "abc1234", "password123", "tokenvalue"):
+            self.assertNotIn(secret, value)
+        self.assertIn("[REDACTED]", value)
+
     def test_secrets_are_redacted_from_status(self):
         log = ("secret " + self.app.GH_TOKEN + "\\n" + self.app.ADMIN
                + "\\npassword=examplepassword\\n")
