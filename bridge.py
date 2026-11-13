@@ -358,6 +358,7 @@ def build_prompt(r, n, branch=None, files=(), target=None):
     return {"prompt": result if len(parts) == 1 else None,
             "parts": parts, "part_count": len(parts),
             "multipart": len(parts) > 1,
+            "package_id": hashlib.sha256(result.encode("utf-8")).hexdigest()[:16],
             "chars": len(result), "complete_context": True,
             "files_included": selected, "auto_context": auto_selected,
             "branch": ref}
