@@ -532,6 +532,8 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
  .app #view.repo-workspace #work-items{min-height:150px}
  .app #view.repo-workspace .workspace-switch{margin-bottom:7px}
 }
+.docker-loading{display:grid;justify-items:start;align-content:start;gap:15px;max-width:650px;padding:24px;border:1px solid var(--line);border-radius:13px;background:var(--surface)}
+.docker-loading p{font-size:13px;color:var(--muted);margin:0}
 </style>
 </head>
 <body>
@@ -1308,11 +1310,14 @@ function setPage(page){
 }
 async function refreshDocker(){
   const repo=S.repo;
-  $('#docker-view').textContent='Memuat pengaturan Docker...';
+  $('#docker-view').innerHTML='<div class="docker-loading"><button type="button" data-docker="back-to-issues">Kembali ke Issues</button><p role="status">Memuat pengaturan Docker & QA...</p></div>';
   const endpoint='/api/docker/settings'+(repo?'?repo='+encodeURIComponent(repo):'');
   const cfg=await run('Memuat pengaturan Docker',()=>api(endpoint));
   if(S.page!=='docker'||repo!==S.repo)return;
-  if(!cfg){$('#docker-view').textContent='Pengaturan Docker gagal dimuat.';return}
+  if(!cfg){
+    $('#docker-view').innerHTML='<div class="docker-loading"><button type="button" data-docker="back-to-issues">Kembali ke Issues</button><p role="alert">Pengaturan Docker gagal dimuat. Periksa notifikasi di atas lalu coba lagi.</p><button type="button" data-docker="reload">Coba lagi</button></div>';
+    return;
+  }
   S.deployBranches=null;
   S.dockerCfg=cfg;drawDocker();
   if(repo){
