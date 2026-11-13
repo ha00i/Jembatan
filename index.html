@@ -570,11 +570,12 @@ function row(i){
     <pre data-res hidden></pre>
     <div data-f hidden><textarea rows="6" readonly data-follow></textarea><button data-act="copy" data-sel="[data-follow]">Salin prompt lanjutan</button></div>
     <div data-push hidden><button class="go" data-act="push">Push dan buat PR</button></div>
+    <div class="row"><button data-act="pr-status">Periksa / lanjutkan PR</button></div>
     <div class="workflow-next" data-pr-stage hidden><a data-pr-link href="#" target="_blank" rel="noopener">Buka PR</a> <button class="go" data-act="merge-pr">Merge PR ke branch tujuan</button></div>
     <div class="workflow-qa" data-qa-stage hidden><strong>PR sudah merge. Tahap terakhir: QA manual.</strong><p>Buka Docker & QA untuk menguji; kesalahan akan dicatat pada issue GitHub.</p><button data-act="open-docker">Buka Docker & QA</button></div>
     <div class="workflow-manual"><h4>QA manual dari terminal</h4><p>Jika tes dijalankan di terminal, tempel output FAIL/ERROR di sini. Issue akan dibuka ulang bila sudah closed.</p>
       <textarea rows="5" data-qa-log placeholder="Tempel pesan FAIL/ERROR dan output tes"></textarea>
-      <button data-act="qa-fail">Laporkan QA gagal &amp; buat prompt lengkap</button>
+      <div class="row"><button data-act="qa-pass">QA PASS — Selesaikan issue</button><button data-act="qa-fail">QA FAIL — laporkan &amp; buat prompt</button></div>
       <div data-qa-report hidden><p data-qa-report-note></p><textarea rows="8" readonly data-qa-prompt></textarea><button data-act="copy" data-sel="[data-qa-prompt]">Salin prompt perbaikan</button></div>
     </div>
    </div></details>`;
@@ -737,6 +738,38 @@ $('#view').onclick=async e=>{
   if(act==='toggle-closed'){S.showClosed=!S.showClosed;return drawMain()}
   if(act==='copy')return copy(q(b.dataset.sel));
   if(act==='deploy')return $('#nav-docker').click();
+  if(act==='pr-status'){
+    const result=await run('Memeriksa PR issue',()=>api('/api/pr/status?repo='+
+      encodeURIComponent(repo)+'&issue='+n));
+    if(!result)return;
+    if(!result.found)return notify('Belum ada PR untuk issue ini. Push patch terlebih dahulu.','warning');
+    if(result.merged){
+      S.qaIssueNumber=n;
+      q('[data-pr-stage]').hidden=true;
+      q('[data-qa-stage]').hidden=false;
+      return notify('PR #'+result.number+' telah merge ke '+result.base+'. QA menjadi tahap terakhir.','info');
+    }
+    if(result.state!=='open')return notify('PR #'+result.number+' sudah ditutup tanpa merge.','warning');
+    S.prMerges[repo+'#'+n]={number:result.number,base:result.base,head_sha:result.head_sha};
+    if([...q('[data-pr-target]').options].some(o=>o.value===result.base)){
+      q('[data-pr-target]').value=result.base;
+    }
+    q('[data-pr-stage]').hidden=false;
+    q('[data-pr-link]').href=result.url;
+    q('[data-pr-link]').textContent='PR #'+result.number+' → '+result.base;
+    return notify('PR siap ditinjau. Merge tetap memerlukan konfirmasi.','info');
+  }
+  if(act==='qa-pass'){
+    if(!confirm('Konfirmasi QA MANUAL PASS untuk issue #'+n+
+      '? Issue akan ditutup sebagai selesai.'))return;
+    const result=await run('Menyelesaikan issue sesudah QA PASS',()=>api('/api/qa/pass','POST',{
+      repo,issue:n,confirmed:true}));
+    if(result?.state==='closed'){
+      notify('Issue #'+n+' ditutup setelah konfirmasi QA PASS.','success');
+      await openRepo(repo);
+    }
+    return;
+  }
   if(act==='qa-fail'){
     const log=q('[data-qa-log]').value.trim();
     if(!log)return notify('Tempel log QA gagal dahulu.','warning');
