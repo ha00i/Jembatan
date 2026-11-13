@@ -8,10 +8,13 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       WORKDIR: /srv/jembatan/repos
+      JEMBATAN_DATA: /srv/jembatan/workflow-state
       # Legacy TEST_CMD sengaja tidak diteruskan: QA memakai profil aman di Docker & QA.
       DEPLOY_MAP: ${DEPLOY_MAP:-}
     volumes:
       # Path di host dan di kontainer HARUS sama, supaya docker compose milik repo
       # (lewat docker.sock) menemukan file-nya.
       - /srv/jembatan/repos:/srv/jembatan/repos
+      # SQLite workflow.db (+ WAL) must survive container rebuild/restart.
+      - /srv/jembatan/workflow-state:/srv/jembatan/workflow-state
       - /var/run/docker.sock:/var/run/docker.sock
