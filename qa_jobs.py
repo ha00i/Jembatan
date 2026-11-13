@@ -52,6 +52,10 @@ def _public(job, app):
         "target_branch": job.get("qa_branch"),
         "source_sha": job.get("source_sha"), "qa_verified": job.get("qa_verified", False),
         "verify_reason": job.get("verify_reason", "Belum ada bukti SHA"),
+        "issue_number": job.get("issue_number"),
+        "report_issue_url": job.get("report_issue_url"),
+        "followup_prompt": job.get("followup_prompt"),
+        "report_error": job.get("report_error"),
     }}
 
 
@@ -134,6 +138,27 @@ def _runner(app, job):
             job["ok"] = False
             job["exit_code"] = None
     finally:
+        if job.get("ok") is False and job.get("report_on_fail"):
+            with _LOCK:
+                job["state"] = "running"
+                job["stage"] = "Melaporkan QA gagal ke GitHub"
+                job["updated_at"] = time.time()
+            try:
+                result = app.report_qa_failure(
+                    job["repo"], job.get("issue_number"), job["log"],
+                    job.get("qa_branch"))
+                with _LOCK:
+                    job["issue_number"] = result["issue"]
+                    job["report_issue_url"] = result["url"]
+                    job["followup_prompt"] = result["prompt"]
+                report("\n[Jembatan] Issue QA: " + result["url"] + "\n")
+            except Exception as exc:
+                with _LOCK:
+                    job["report_error"] = str(exc)[:500]
+                report("\n[Jembatan] Pelaporan issue gagal: " + str(exc)[:300] + "\n")
+            with _LOCK:
+                job["state"] = "failed"
+                job["stage"] = "QA gagal"
         with _LOCK:
             job["finished_at"] = time.time()
             job["updated_at"] = job["finished_at"]
@@ -141,12 +166,26 @@ def _runner(app, job):
                 _ACTIVE = None
 
 
-def start(app, repo):
+def start(app, repo, issue_number=None, report_on_fail=False):
     global _ACTIVE
     # Validate repo/profile before reserving the singleton worker slot.
     mapping = docker_control._app_settings(app, repo)
     if not mapping["qa_container"] or mapping["qa_profile"] not in docker_control.QA_PROFILES or not docker_control.QA_NAME_RE.search(mapping["qa_container"]):
         raise docker_control.DockerError("Atur container QA dan profil tes valid terlebih dahulu", 409)
+    if type(report_on_fail) is not bool:
+        raise docker_control.DockerError("Pengaturan laporan QA harus boolean", 400)
+    if issue_number not in (None, ""):
+        try:
+            issue_number = int(issue_number)
+        except (TypeError, ValueError) as exc:
+            raise docker_control.DockerError("Nomor issue QA tidak valid", 409) from exc
+        if issue_number < 1:
+            raise docker_control.DockerError("Nomor issue QA harus positif", 409)
+        issue = app.gh(f"/repos/{repo}/issues/{issue_number}")
+        if issue.get("pull_request"):
+            raise docker_control.DockerError("Nomor issue QA mengarah ke PR", 409)
+    else:
+        issue_number = None
     with _LOCK:
         if _ACTIVE:
             busy = next((j for j in _JOBS.values() if j["id"] == _ACTIVE), None)
@@ -158,6 +197,8 @@ def start(app, repo):
             raise docker_control.DockerError("Sumber branch QA tidak valid", 409)
         job = dict(id=identifier, repo=repo, container=mapping["qa_container"],
                    profile=mapping["qa_profile"], qa_branch_mode=mode, qa_branch=None,
+                   issue_number=issue_number, report_on_fail=report_on_fail,
+                   report_issue_url=None, report_error=None, followup_prompt=None,
                    source_sha=None, qa_verified=False, verify_reason="Menunggu pemeriksaan",
                    state="queued", stage="Menyiapkan QA",
                    started_at=now, updated_at=now, finished_at=None,
