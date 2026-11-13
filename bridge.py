@@ -219,9 +219,12 @@ akan DITOLAK Jembatan. QA dan merge tetap tahap terpisah."""
 MAX_PROMPT_CHARS = 125000
 
 
-def build_prompt(r, n, branch=None, files=()):
+def build_prompt(r, n, branch=None, files=(), target=None):
     d = repo_dir(r)
-    base = default_branch(d)
+    base = target or default_branch(d)
+    if not docker_control.valid_branch(base) or not git(d, "rev-parse", "--verify", "-q",
+                                                      f"refs/remotes/origin/{base}", check=False):
+        raise Err("Branch tujuan PR belum tersinkron atau tidak valid", 409)
     ref = need_branch(branch) if branch else base
     issue = gh(f"/repos/{r}/issues/{int(n)}")
     if "pull_request" in issue:
@@ -286,9 +289,12 @@ def require_complete_reply(reply):
         raise Err("Blok diff lengkap belum ditemukan atau belum ditutup.", 409)
 
 
-def apply_patch(r, n, reply, branch=None):
+def apply_patch(r, n, reply, branch=None, target=None):
     d = repo_dir(r)
-    base = default_branch(d)
+    base = target or default_branch(d)
+    if not docker_control.valid_branch(base) or not git(d, "rev-parse", "--verify", "-q",
+                                                      f"refs/remotes/origin/{base}", check=False):
+        raise Err("Branch tujuan PR tidak ada pada clone lokal. Sinkron ulang repository.", 409)
     if git(d, "status", "--porcelain"):
         raise Err("Folder repo ini kotor. Jangan edit manual folder kerja bot.", 409)
     require_complete_reply(reply)
@@ -631,9 +637,9 @@ ROUTES = {
     ("POST", "/api/branches/cleanup"): lambda q, b: branch_manager.cleanup_remote(
         sys.modules[__name__], b["repo"], b["confirm"]),
     ("POST", "/api/prompt"): lambda q, b: build_prompt(b["repo"], int(b["issue"]), b.get("branch") or None,
-                                                       b.get("files") or []),
+                                                       b.get("files") or [], b.get("target")),
     ("POST", "/api/apply"): lambda q, b: apply_patch(b["repo"], int(b["issue"]), b["reply"],
-                                                     b.get("branch") or None),
+                                                     b.get("branch") or None, b.get("target")),
     ("POST", "/api/push"): lambda q, b: push(b["repo"], b["branch"], int(b["issue"]), b.get("target")),
     ("POST", "/api/pr/merge"): lambda q, b: merge_issue_pr(
         b["repo"], b["issue"], b["pr_number"], b["base"], b["head_sha"]),
