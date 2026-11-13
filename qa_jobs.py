@@ -130,17 +130,23 @@ def _runner(app, job):
             reason = source_reason
         report(f"[Jembatan] Branch QA: {source_branch or 'belum diketahui'}" +
                (f" · GitHub SHA {expected_sha[:12]}" if expected_sha else "") + "\n")
+        # For issue-linked final QA, a green test on the wrong or unverifiable
+        # commit is not a passed QA gate. Unlinked QA keeps the test result and
+        # separately reports whether SHA evidence was verified.
+        passed = bool(result["ok"] and (verified if job.get("issue_number") else True))
         with _LOCK:
             job["source_sha"] = source_sha
             job["qa_branch"] = source_branch if branch_matches_mode else None
             job["qa_verified"] = verified
             job["verify_reason"] = reason
-            job["ok"] = result["ok"]
-            job["exit_code"] = 0 if result["ok"] else None
-            job["state"] = ("passed" if result["ok"] else
+            job["ok"] = passed
+            job["exit_code"] = 0 if passed else None
+            job["state"] = ("passed" if passed else
                             "running" if job.get("report_on_fail") else "failed")
-            job["stage"] = "Tes selesai" if result["ok"] else "Tes gagal"
-        report("\n[Jembatan] " + ("PASS" if result["ok"] else "FAIL") + " — periksa hasil tes di atas.\n")
+            job["stage"] = "Tes dan SHA terverifikasi" if passed and job.get("issue_number") else (
+                "Tes selesai" if passed else "Tes/gate SHA gagal")
+        report("\n[Jembatan] " + ("QA FINAL PASS" if passed and job.get("issue_number") else
+               "QA COMMAND PASS" if passed else "QA FINAL FAIL") + " — periksa hasil tes di atas.\n")
         report("[Jembatan] Bukti commit: " + reason + "\n")
     except Exception as exc:
         # Error strings from the Docker controller can contain container output.
