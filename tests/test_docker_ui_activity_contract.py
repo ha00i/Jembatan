@@ -65,6 +65,23 @@ class DockerActivityUIContract(unittest.TestCase):
         self.assertIn("Branch belum disimpan", HTML)
         self.assertIn("Memeriksa branch GitHub...", HTML)
 
+    def test_independent_qa_and_deploy_selectors_are_visible(self):
+        self.assertIn('id="docker-qa-branch-mode"', HTML)
+        self.assertIn("Branch aktif (checkout container QA)", HTML)
+        self.assertIn("Branch default GitHub", HTML)
+        self.assertIn("Branch untuk deploy (independen dari QA)", HTML)
+        self.assertIn("qa_branch_mode:$('#docker-qa-branch-mode').value", HTML)
+
+    def test_unsaved_branch_selections_do_not_run_operations(self):
+        self.assertIn("Sumber branch QA belum disimpan", HTML)
+        self.assertIn("Branch deploy belum disimpan", HTML)
+        self.assertIn("S.dockerCfg?.app?.qa_branch_mode||'active'", HTML)
+        self.assertIn("S.dockerCfg?.app?.deploy_branch||'main'", HTML)
+
+    def test_qa_help_does_not_claim_automatic_checkout_switching(self):
+        self.assertIn("checkout QA harus sudah berada di branch tersebut", HTML)
+        self.assertIn("Jika berbeda branch, deploy hanya diizinkan bila SHA commit sama", HTML)
+
     def test_toasts_are_actionable_and_accessible(self):
         self.assertIn('id="toast-stack" aria-label="Notifikasi aktivitas"', HTML)
         self.assertIn('class="notice-close" aria-label="Tutup notifikasi"', HTML)
