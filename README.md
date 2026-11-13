@@ -113,12 +113,34 @@ python3 -m py_compile bridge.py docker_control.py qa_jobs.py
 - Jika repository tidak memiliki `main` maupun `staging`, deployment ditahan
   karena belum ada target yang didukung.
 
+### Pilihan branch QA dan deploy terpisah
+
+**Sumber QA** mempunyai dua pilihan yang disimpan per repository:
+- **Branch aktif:** jalankan preset tes pada branch yang sekarang aktif di
+  **checkout Git dalam container QA**, bukan branch yang sedang dibuka di UI.
+- **Branch default GitHub:** jalankan preset hanya bila checkout Git container QA
+  sudah berada di branch default GitHub (misalnya `main`, `master`, atau `develop`).
+  Jembatan **tidak** menjalankan `git switch`/checkout secara otomatis pada
+  container yang sedang aktif; jika berbeda, tampil alasan dan tes tidak dimulai.
+
+**Branch deploy** dipilih **secara independen** dari daftar branch GitHub yang
+benar-benar tersedia, termasuk `feature/...`, `staging`, dan `release/...`.
+Pengaturan tidak mengubah branch QA. Semua operasi deploy masih mengharuskan
+Git origin, branch aktif folder deploy, SHA, dan healthcheck sesuai kebijakan.
+
+QA PASS pada branch A **boleh dipakai untuk deploy branch B hanya jika SHA
+commit keduanya sama persis**. Jika SHA berbeda, Jembatan menolak deploy
+sampai checkout QA yang tepat sudah diuji; tidak menganggap PASS lintas branch
+sebagai izin otomatis. QA memeriksa Git origin, branch checkout aktif, tracked
+files, dan SHA sebelum/sesudah tes. Hasil QA tersimpan sementara di memori.
+
 ### Deploy terkunci pada branch, SHA, dan QA
 
-- Pilih **main** atau **staging** di pengaturan aplikasi, kemudian **Simpan aplikasi**.
-- Jalankan QA pada **checkout Git yang sesuai branch target** di container QA.
+- Pilih **Sumber QA** (Aktif / Default GitHub) dan **Branch Deploy** terpisah,
+  lalu klik **Simpan aplikasi**.
+- Jalankan QA di checkout Git yang sesuai pilihan sumber QA dalam container.
   Jembatan memeriksa `git rev-parse HEAD` serta perubahan tracked files sebelum
-  dan sesudah tes, lalu mencocokkannya dengan SHA GitHub branch target.
+  dan sesudah tes, lalu mencocokkannya dengan SHA GitHub branch QA.
 - QA bisa **PASS tetapi SHA belum terverifikasi** jika container tidak memiliki
   Git checkout, sumbernya kotor, atau commitnya berbeda. Status tersebut tidak
   mengizinkan deploy.
