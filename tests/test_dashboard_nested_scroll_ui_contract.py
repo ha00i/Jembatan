@@ -66,6 +66,30 @@ class DashboardNestedScrollContract(unittest.TestCase):
         self.assertIn("max-height:min(72dvh,690px);overflow-y:auto", HTML)
         self.assertIn("-webkit-overflow-scrolling:touch", HTML)
 
+    def test_duplicate_top_navigation_is_removed_but_contextual_navigation_remains(self):
+        self.assertNotIn('<nav class="simple-nav" aria-label="Menu utama">', HTML)
+        self.assertNotIn('id="nav-repos"', HTML)
+        self.assertNotIn('id="nav-docker"', HTML)
+        self.assertIn('data-act="open-docker">Docker & QA', HTML)
+        self.assertIn('data-docker="back-to-issues">Kembali ke Issues', HTML)
+        self.assertIn('data-act="open-docker">Pengaturan Docker &amp; QA', HTML)
+        self.assertIn("if(act==='back-to-issues')return setPage('repos')", HTML)
+
+    def test_short_desktop_defaults_to_expanded_issue_list(self):
+        self.assertIn("S.listFocus=Boolean(document.documentElement?.clientWidth>=761", HTML)
+        self.assertIn("document.documentElement?.clientHeight<760", HTML)
+        self.assertIn('Tampilkan ringkasan', HTML)
+        self.assertIn("is-list-focused>.metrics{display:none}", HTML)
+
+    def test_compact_layout_frees_vertical_space_for_scrollable_issue_panel(self):
+        self.assertIn(".app .content{padding-top:10px;padding-bottom:10px}", HTML)
+        self.assertIn(".app .topbar{min-height:50px", HTML)
+        self.assertIn(".app #view.repo-workspace .metric{min-height:57px", HTML)
+        self.assertIn(".app #view.repo-workspace .workspace-switch>button{min-height:32px", HTML)
+        self.assertIn(".app #view.repo-workspace #work-items{min-height:150px}", HTML)
+        self.assertIn("@media(min-width:761px) and (max-height:760px)", HTML)
+        self.assertIn(".app #view.repo-workspace .issue-pagination{margin:0 0 5px", HTML)
+
     def test_merge_summary_follows_selected_repository_default_branch(self):
         self.assertIn("Diduga masuk ${esc(d.base)}", HTML)
         self.assertNotIn("Diduga sudah di main", HTML)
@@ -75,7 +99,8 @@ class DashboardNestedScrollContract(unittest.TestCase):
         self.assertIn('data-act="push"', HTML)
         self.assertIn('data-act="merge-pr"', HTML)
         self.assertIn('data-act="qa-fail"', HTML)
-        self.assertIn("$('#nav-docker').onclick=()=>setPage('docker')", HTML)
+        self.assertIn("if(act==='open-docker')return setPage('docker')", HTML)
+        self.assertIn("if(act==='deploy')return setPage('docker')", HTML)
 
 
 if __name__ == "__main__":
