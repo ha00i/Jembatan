@@ -751,6 +751,9 @@ $('#view').onclick=async e=>{
       S.qaIssueNumber=n;
       q('[data-pr-stage]').hidden=true;
       q('[data-qa-stage]').hidden=false;
+      q('[data-qa-stage] p').textContent='QA adalah tahap terakhir. Pastikan checkout container QA benar-benar menguji '+result.base+
+        (result.merge_sha?' pada commit '+result.merge_sha.slice(0,12):'')+
+        '. Jembatan tidak mengganti checkout QA secara otomatis.';
       return notify('PR #'+result.number+' telah merge ke '+result.base+'. QA menjadi tahap terakhir.','info');
     }
     if(result.state!=='open')return notify('PR #'+result.number+' sudah ditutup tanpa merge.','warning');
@@ -802,6 +805,9 @@ $('#view').onclick=async e=>{
     if(result?.merged){
       q('[data-pr-stage]').hidden=true;
       q('[data-qa-stage]').hidden=false;
+      q('[data-qa-stage] p').textContent='QA berikutnya harus menguji branch '+result.branch+
+        (result.merge_sha?' pada commit '+result.merge_sha.slice(0,12):'')+
+        '. Jembatan tidak otomatis checkout branch dalam container QA.';
       S.qaIssueNumber=n;
       notify('PR merged ke '+result.branch+'. Selanjutnya jalankan QA manual.','success','Merge selesai');
       refreshBranches(repo);
