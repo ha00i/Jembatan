@@ -125,7 +125,8 @@ def _runner(app, job):
             job["verify_reason"] = reason
             job["ok"] = result["ok"]
             job["exit_code"] = 0 if result["ok"] else None
-            job["state"] = "passed" if result["ok"] else "failed"
+            job["state"] = ("passed" if result["ok"] else
+                            "running" if job.get("report_on_fail") else "failed")
             job["stage"] = "Tes selesai" if result["ok"] else "Tes gagal"
         report("\n[Jembatan] " + ("PASS" if result["ok"] else "FAIL") + " — periksa hasil tes di atas.\n")
         report("[Jembatan] Bukti commit: " + reason + "\n")
@@ -133,7 +134,7 @@ def _runner(app, job):
         # Error strings from the Docker controller can contain container output.
         report("\n[Jembatan] ERROR: " + str(exc)[-1200:] + "\n")
         with _LOCK:
-            job["state"] = "failed"
+            job["state"] = "running" if job.get("report_on_fail") else "failed"
             job["stage"] = "Gagal menjalankan QA"
             job["ok"] = False
             job["exit_code"] = None
