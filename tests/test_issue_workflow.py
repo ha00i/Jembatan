@@ -4,6 +4,17 @@ from unittest import TestCase
 from unittest.mock import patch
 import bridge
 
+def restore_part(part):
+    """Extract only the payload between the transport wrappers."""
+    return part.split("=== AWAL KONTEN BAGIAN ===\n", 1)[1].rsplit(
+        "\n=== AKHIR KONTEN BAGIAN", 1)[0]
+
+
+def restore_parts(parts):
+    return "".join(restore_part(part) if "=== AWAL KONTEN" in part else part
+                   for part in parts)
+
+
 COMPLETE = (
     "STATUS: SELESAI\nKEKURANGAN:\n- tidak ada\n"
     "PERUBAHAN:\n- Semua permintaan diselesaikan\n"
@@ -53,14 +64,37 @@ class PromptContract(TestCase):
         self.assertIn("app.py", result["files_included"])
         self.assertIn("F" * 16000, result["prompt"])
 
-    def test_large_context_fails_explicitly(self):
+    def test_large_context_is_packaged_without_discarding_source(self):
         def large(d, *args, **kw):
             if args[0] == "show":
                 return "X" * 130000
             return self.git_stub(d, *args, **kw)
         with patch.object(bridge, "git", side_effect=large):
-            with self.assertRaisesRegex(bridge.Err, "tidak memotong"):
-                bridge.build_prompt("ha00i/Jembatan", 11, files=["app.py"])
+            result = bridge.build_prompt("ha00i/Jembatan", 11, files=["app.py"])
+        self.assertTrue(result["multipart"])
+        self.assertGreater(result["part_count"], 1)
+        self.assertIsNone(result["prompt"])  # do not double-send enormous data
+        restored = restore_parts(result["parts"])
+        self.assertEqual(len(restored), result["chars"])
+        self.assertIn("X" * 130000, restored)
+        self.assertTrue(result["complete_context"])
+
+    def test_644871_character_prompt_round_trips_losslessly(self):
+        original = "REPO QA: " + ("X" * (644871 - len("REPO QA: ")))
+        self.assertEqual(len(original), 644871)
+        parts = bridge.package_prompt_parts(original)
+        self.assertGreaterEqual(len(parts), 6)
+        self.assertEqual("".join(restore_part(p) for p in parts), original)
+        self.assertTrue(all(len(p) <= bridge.MAX_PROMPT_CHARS for p in parts))
+        self.assertTrue(all("Jangan mulai coding" in part for part in parts[:-1]))
+        self.assertIn("INI BAGIAN TERAKHIR", parts[-1])
+        self.assertEqual(parts.count(parts[0]), 1)
+
+    def test_single_message_under_limit_is_unchanged(self):
+        content = "A" * bridge.MAX_PROMPT_CHARS
+        self.assertEqual(bridge.package_prompt_parts(content), [content])
+        over = bridge.package_prompt_parts(content + "B")
+        self.assertEqual("".join(restore_part(p) for p in over), content + "B")
 
     def test_missing_file_fails(self):
         with patch.object(bridge, "git", side_effect=self.git_stub):
