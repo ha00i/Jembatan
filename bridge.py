@@ -192,17 +192,31 @@ def overview(r):
 
 
 # ---------- prompt untuk ChatGPT ----------
-FORMAT = """## Yang saya minta
-Jawab persis dengan format ini, tanpa penjelasan di luar format:
+FORMAT = """## Kontrak penyelesaian (WAJIB)
+Kerjakan SEMUA kriteria dan ruang lingkup issue dalam SATU jawaban.
+Jangan berhenti di satu fungsi, sebagian file, atau langkah berikutnya.
+Tidak boleh mengatakan SELESAI jika masih ada pekerjaan yang kurang.
+Jika konteks file belum cukup, balas hanya "BUTUH FILE: path1, path2";
+jangan kirim patch parsial atau mengarang hasil tes.
+Jika output akan terpotong, minta konteks yang tepat dan jangan klaim SELESAI.
 
-STATUS: SELESAI | SEBAGIAN | BELUM
+STATUS: SELESAI
 KEKURANGAN:
-- (poin-poin yang masih kurang; tulis "tidak ada" bila sudah lengkap)
+- tidak ada
+PERUBAHAN:
+- daftar perubahan yang memenuhi SEMUA kriteria issue
+VERIFIKASI:
+- tes yang benar-benar dijalankan (jika belum, tulis "belum dijalankan")
 PATCH:
-(satu blok ```diff berformat unified diff; path relatif dari root repo dengan awalan a/ dan b/;
- kosongkan bila tidak perlu perubahan)
+```diff
+(unified diff lengkap, path a/ dan b/, tidak dipotong)
+```
 
-Jika kamu butuh file lain untuk menjawab, tulis satu baris "BUTUH FILE: path1, path2" dan jangan membuat patch."""
+STATUS: SEBAGIAN, kekurangan yang belum kosong, atau diff tidak lengkap
+akan DITOLAK Jembatan. QA dan merge tetap tahap terpisah."""
+
+
+MAX_PROMPT_CHARS = 125000
 
 
 def build_prompt(r, n, branch=None, files=()):
@@ -210,19 +224,34 @@ def build_prompt(r, n, branch=None, files=()):
     base = default_branch(d)
     ref = need_branch(branch) if branch else base
     issue = gh(f"/repos/{r}/issues/{int(n)}")
-    tree = git(d, "ls-tree", "-r", "--name-only", f"origin/{base}").splitlines()
-    p = [f"Kamu membantu mengerjakan issue #{n} di repo {r} (branch default: {base}).", "",
-         f"## Issue #{n}: {issue['title']}", (issue.get("body") or "(kosong)")[:4000], "",
-         f"## Daftar file ({len(tree)} file, maksimal 400 ditampilkan)", "\n".join(tree[:400]), ""]
+    if "pull_request" in issue:
+        raise Err("Nomor ini PR, bukan issue", 409)
+    tree = git(d, "ls-tree", "-r", "--name-only", f"origin/{ref}").splitlines()
+    p = [f"Selesaikan SEPENUHNYA issue #{n} di repository {r}.",
+         f"Branch konteks: {ref}; default: {base}.",
+         "Merge/QA adalah tahap manual terpisah. Jangan mengaku sudah PASS.",
+         "", f"## Issue #{n}: {issue['title']}", issue.get("body") or "(kosong)", "",
+         f"## DAFTAR FILE LENGKAP ({len(tree)} file)", "\n".join(tree), ""]
     if branch:
         rng = f"origin/{base}...origin/{ref}"
-        p += [f"## Pekerjaan di branch {ref} (dibanding {base})", git(d, "diff", "--stat", rng),
-              "```diff", git(d, "diff", rng)[:30000], "```", ""]
-    for f in list(files)[:10]:
-        p += [f"## Isi file {f}", "```", git(d, "show", f"origin/{ref}:{f}")[:12000], "```", ""]
+        p += [f"## Diff utuh {ref} dibanding {base}",
+              "```diff", git(d, "diff", rng), "```", ""]
+    selected = list(dict.fromkeys(files))
+    if len(selected) > 20:
+        raise Err("Maksimal 20 file konteks, pilih yang relevan.", 409)
+    for file in selected:
+        if not isinstance(file, str) or file not in tree:
+            raise Err(f"File konteks tidak ditemukan dalam branch {ref}: {str(file)[:160]}", 409)
+        p += [f"## ISI UTUH {file}", "```",
+              git(d, "show", f"origin/{ref}:{file}"), "```", ""]
     p.append(FORMAT)
-    text = "\n".join(p)
-    return {"prompt": text, "chars": len(text)}
+    result = "\n".join(p)
+    if len(result) > MAX_PROMPT_CHARS:
+        raise Err(f"Prompt memerlukan {len(result)} karakter; terlalu besar untuk "
+                  "satu permintaan. Pilih lebih sedikit file atau diff branch "
+                  "lebih kecil. Jembatan tidak memotong konteks diam-diam.", 409)
+    return {"prompt": result, "chars": len(result), "complete_context": True,
+            "files_included": selected, "branch": ref}
 
 
 # ---------- terapkan patch dari ChatGPT ----------
@@ -240,11 +269,29 @@ def extract_patch(text):
     return patch.rstrip("\n") + "\n"
 
 
+def require_complete_reply(reply):
+    """Fail closed on a partial reply, before checking out/creating a branch."""
+    if not isinstance(reply, str) or not reply.strip():
+        raise Err("Balasan ChatGPT kosong", 409)
+    if re.search(r"(?im)^\s*BUTUH FILE\s*:", reply):
+        raise Err("ChatGPT masih membutuhkan file. Lengkapi konteks sebelum menerapkan patch.", 409)
+    states = re.findall(r"(?im)^STATUS:\s*(SELESAI|SEBAGIAN|BELUM)\s*$", reply)
+    if states != ["SELESAI"]:
+        raise Err("Balasan belum berstatus SELESAI secara tunggal. "
+                  "Tuntaskan seluruh pekerjaan dan kirim satu patch lengkap.", 409)
+    section = re.search(r"(?ims)^KEKURANGAN:\s*\n(.*?)(?=^[A-Z][A-Z ]+:|\Z)", reply)
+    if not section or not re.fullmatch(r"\s*-\s*tidak ada\s*", section.group(1), re.I):
+        raise Err("Masih ada KEKURANGAN; patch sebagian tidak diterapkan.", 409)
+    if "```diff" not in reply or not re.search(r"(?ms)^```diff[ \t]*\n.+?\n```", reply):
+        raise Err("Blok diff lengkap belum ditemukan atau belum ditutup.", 409)
+
+
 def apply_patch(r, n, reply, branch=None):
     d = repo_dir(r)
     base = default_branch(d)
     if git(d, "status", "--porcelain"):
         raise Err("Folder repo ini kotor. Jangan edit manual folder kerja bot.", 409)
+    require_complete_reply(reply)
     patch = extract_patch(reply)
     # One issue → one stable branch; repeat fixes never generate extra branches.
     stable = f"bridge/issue-{int(n)}"
