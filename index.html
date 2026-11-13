@@ -384,6 +384,10 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
 .docker-qa-follow button{justify-self:start;min-height:43px}
 .docker-qa-follow a{overflow-wrap:anywhere}
 @media(max-width:540px){.docker-qa-follow button{width:100%}}
+
+.docker-panel .qa-report-toggle{display:flex;gap:11px;align-items:center;margin-top:19px;font-size:13px;font-weight:650;line-height:1.4;cursor:pointer}
+.docker-panel .qa-report-toggle input{width:18px;height:18px;min-height:18px;flex:0 0 18px;accent-color:var(--accent)}
+.flow-hint{flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -557,7 +561,7 @@ function row(i){
   return `<details class="is ${i.status}" data-n="${i.number}"${open}>
    <summary><span class="n">#${i.number}</span><span class="t">${esc(i.title)}</span>
     <span class="bar" title="${esc(lbl)}">${[1,2,3,4].map(x=>`<i${x<=k?' class="on"':''}></i>`).join('')}</span><span class="l">${esc(lbl)}</span></summary>
-   <div class="body"><div class="flow-hint"><span>Buat prompt</span><span>Terapkan patch</span><span>Jalankan QA</span><span>Kirim PR</span></div>
+   <div class="body"><div class="flow-hint"><span>Prompt lengkap</span><span>Terapkan patch</span><span>PR &amp; merge</span><span>QA manual terakhir</span></div>
     <p><a href="${esc(i.url)}" target="_blank" rel="noopener">Buka issue di GitHub</a></p>
     ${i.branches.length?`<ul>${i.branches.map(b=>`<li><code>${esc(b.name)}</code>: ${b.ahead} commit di depan, ${b.behind} tertinggal${b.merged?', sudah masuk':''} (${esc(b.date)})</li>`).join('')}</ul>`:'<p class="mute">Belum ada branch atau commit yang menyebut issue ini.</p>'}
     <p class="context-note">PR harus ditinjau sebelum merge. QA dijalankan manual setelah merge.</p>
@@ -573,7 +577,7 @@ function row(i){
     <div class="row"><button data-act="pr-status">Periksa / lanjutkan PR</button></div>
     <div class="workflow-next" data-pr-stage hidden><a data-pr-link href="#" target="_blank" rel="noopener">Buka PR</a> <button class="go" data-act="merge-pr">Merge PR ke branch tujuan</button></div>
     <div class="workflow-qa" data-qa-stage hidden><strong>PR sudah merge. Tahap terakhir: QA manual.</strong><p>Buka Docker & QA untuk menguji; kesalahan akan dicatat pada issue GitHub.</p><button data-act="open-docker">Buka Docker & QA</button></div>
-    <div class="workflow-manual"><h4>QA manual dari terminal</h4><p>Jika tes dijalankan di terminal, tempel output FAIL/ERROR di sini. Issue akan dibuka ulang bila sudah closed.</p>
+    <div class="workflow-manual"><h4>QA manual dari terminal</h4><p>Jika tes dijalankan di terminal, tempel output FAIL/ERROR di sini. Periksa dan hapus rahasia dari log sebelum dikirim ke GitHub. Issue akan dibuka ulang bila sudah closed.</p>
       <textarea rows="5" data-qa-log placeholder="Tempel pesan FAIL/ERROR dan output tes"></textarea>
       <div class="row"><button data-act="qa-pass">QA PASS — Selesaikan issue</button><button data-act="qa-fail">QA FAIL — laporkan &amp; buat prompt</button></div>
       <div data-qa-report hidden><p data-qa-report-note></p><textarea rows="8" readonly data-qa-prompt></textarea><button data-act="copy" data-sel="[data-qa-prompt]">Salin prompt perbaikan</button></div>
@@ -1088,7 +1092,8 @@ function drawDocker(){
    '<p>'+(repo?'Repository: <strong>'+esc(repo)+'</strong>':'Pilih repository di sidebar kiri dulu.')+'</p>',
    '<label for="docker-qa-issue">Issue terkait bila QA gagal</label>',
    '<select id="docker-qa-issue"><option value="">Otomatis buat/pakai ulang satu issue QA</option>'+issueOptions+'</select>',
-   '<p class="docker-caption">Jika QA gagal, Jembatan melaporkan log ke GitHub, membuka ulang issue terkait bila sudah closed, dan menyiapkan prompt perbaikan.</p>',
+   '<label class="qa-report-toggle"><input id="docker-report-on-fail" type="checkbox" checked> Laporkan QA gagal otomatis ke GitHub</label>',
+   '<p class="docker-caption">Jika dicentang, log QA yang gagal akan dipublikasikan ke issue GitHub (sesuai visibilitas repository). Periksa agar output pengujian tidak mencetak data rahasia. Jembatan menyamarkan token umum, tetapi tidak semua bentuk rahasia.</p>',
    '<label for="docker-qa-container">Container khusus QA</label>',
    '<input id="docker-qa-container" placeholder="vortex-qa-qa-app-1" value="'+esc(app.qa_container||'')+'"'+disabled+'>',
    '<label for="docker-qa-profile">Jenis tes</label><select id="docker-qa-profile"'+disabled+'>',
@@ -1231,7 +1236,7 @@ $('#docker-view').onclick=async e=>{
     const issueValue=$('#docker-qa-issue').value;
     const issue=issueValue?Number(issueValue):null;
     const r=await run('Menyiapkan QA verbose',()=>api('/api/docker/qa/start','POST',
-      {repo,issue,report_on_fail:true}));
+      {repo,issue,report_on_fail:$('#docker-report-on-fail').checked}));
     if(!r){
       finishDockerOperation(false,'QA gagal dimulai','Permintaan ditolak. Periksa koneksi Docker dan pengaturan container QA.','[Jembatan] QA tidak berhasil dimulai; tidak ada tes yang dijalankan oleh permintaan ini.');
       return;
