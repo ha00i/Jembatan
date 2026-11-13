@@ -534,6 +534,17 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
 }
 .docker-loading{display:grid;justify-items:start;align-content:start;gap:15px;max-width:650px;padding:24px;border:1px solid var(--line);border-radius:13px;background:var(--surface)}
 .docker-loading p{font-size:13px;color:var(--muted);margin:0}
+.compose-detect-row{align-items:center;flex-wrap:wrap;margin-top:8px;margin-bottom:6px}
+.compose-detect-row button{border-color:#A8C5F5;color:#1753AD;background:#EBF3FF}
+.compose-candidates{padding:12px;border:1px solid #CDDCF0;border-radius:12px;background:#F6F9FF;display:grid;gap:10px;margin:6px 0 14px}
+.compose-candidates[hidden]{display:none}
+.compose-candidates>strong{font-size:12px;color:#204477}
+.compose-candidate{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px;border:1px solid #DFE8F6;border-radius:9px;background:white;min-width:0}
+.compose-candidate-info{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1}
+.compose-candidate-info code{overflow-wrap:anywhere;white-space:pre-wrap;font-size:12px;color:#162D5A}
+.compose-candidate-pending{color:#9B6417;font-size:11px;flex-shrink:0}
+.compose-candidate button{flex-shrink:0}
+@media(max-width:540px){.compose-candidate{align-items:flex-start;flex-direction:column}.compose-candidate button{width:100%}}
 </style>
 </head>
 <body>
@@ -565,7 +576,7 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ST={none:['Belum ada pekerjaan',1],ready:['Commit ditemukan · perlu validasi QA',2],merged_open:['Diduga tergabung · issue terbuka',3],done:['Issue ditutup · verifikasi QA terpisah',4]};
-let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},prMerges:{},promptPacks:{},qaIssueNumber:null,filter:'all',issueQuery:'',issuePage:0,repoPanel:'issues',listFocus:false,selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0,page:'repos',showClosed:true,dockerCfg:null,dockerContainers:[]};
+let tok=sessionStorage.getItem('jb-token')||'',S={repos:[],repo:null,data:null,applied:{},prMerges:{},promptPacks:{},qaIssueNumber:null,filter:'all',issueQuery:'',issuePage:0,repoPanel:'issues',listFocus:false,selected:new Set(),branchData:null,branchLoading:false,branchError:null,branchFilter:'all',branchQuery:'',branchRequestId:0,page:'repos',showClosed:true,dockerCfg:null,dockerContainers:[],composeCandidates:null};
 $('#tok').value=tok;
 
 async function api(p,m='GET',b){
@@ -1319,6 +1330,7 @@ async function refreshDocker(){
     return;
   }
   S.deployBranches=null;
+  S.composeCandidates=null;
   S.dockerCfg=cfg;drawDocker();
   if(repo){
     refreshDeployBranches(repo);
@@ -1441,6 +1453,9 @@ function drawDocker(){
    '<p class="docker-caption" id="docker-branch-hint" role="status">Hanya branch yang benar-benar ada di GitHub.</p>',
    '<label for="docker-deploy-path">Path Compose aplikasi</label>',
    '<input id="docker-deploy-path" placeholder="/srv/apps/project" value="'+esc(app.deploy_path||'')+'"'+disabled+'>',
+   '<div class="row compose-detect-row"><button type="button" data-docker="detect-compose"'+disabled+'>Deteksi path Compose</button>',
+   '<span class="docker-caption">Baca lokasi dari Docker tanpa deploy atau mengubah konfigurasi.</span></div>',
+   '<div id="docker-compose-candidates" class="compose-candidates" role="status" aria-live="polite" hidden></div>',
    '<div class="row"><button data-docker="save-app"'+disabled+'>Simpan aplikasi</button>',
    '<button class="go" data-docker="qa"'+disabled+'>Run QA</button>',
    '<button class="danger-outline" data-docker="deploy"'+disabled+'>Deploy</button></div>',
@@ -1461,6 +1476,28 @@ function drawDocker(){
   $('#docker-view').innerHTML=html;
   renderDockerActivity();
   renderDeployBranchChoices();
+}
+function renderComposeCandidates(){
+  const panel=$('#docker-compose-candidates'),data=S.composeCandidates;
+  if(!panel||!data||data.repo!==S.repo)return;
+  panel.hidden=false;
+  const candidates=data.candidates||[];
+  const rows=candidates.map(item=>
+    '<div class="compose-candidate">'+
+    '<div class="compose-candidate-info"><code>'+esc(item.path)+'</code>'+
+    '<span class="docker-caption">'+esc(item.source||'Docker')+
+    ' · '+(item.verified?'Terverifikasi: ':'Belum terverifikasi: ')+
+    esc(item.reason||'Periksa konfigurasi')+'</span></div>'+
+    (item.verified?
+      '<button type="button" data-docker="use-compose" data-compose-path="'+
+      esc(item.path)+'">Pakai path</button>':
+      '<span class="compose-candidate-pending">Periksa mount/SSH</span>')+
+    '</div>').join('');
+  const warnings=(data.warnings||[]).map(msg=>
+    '<p class="docker-caption">'+esc(msg)+'</p>').join('');
+  panel.innerHTML='<strong>Hasil deteksi ('+candidates.length+')</strong>'+
+    (rows||'<p class="docker-caption">Belum ada lokasi Compose yang terdeteksi. Periksa container dan mount folder deployment.</p>')+
+    warnings+'<p class="docker-caption">Path tidak disimpan otomatis. Klik Pakai path, lalu Simpan aplikasi.</p>';
 }
 function dockerAppFormDirty(){
   const app=S.dockerCfg?.app||{};
@@ -1509,11 +1546,41 @@ $('#docker-view').onclick=async e=>{
   }
   if(act==='reload')return refreshDocker();
   if(act==='check-ready')return refreshDeployReadiness(repo);
+  if(act==='detect-compose'){
+    if(!repo)return notify('Pilih repository terlebih dahulu.','warning');
+    const cfg=S.dockerCfg||{},mode=$('#docker-mode').value;
+    if(mode!==cfg.mode||(mode==='ssh'&&(
+      $('#docker-host').value.trim()!==cfg.host||
+      $('#docker-user').value.trim()!==cfg.username||
+      Number($('#docker-port').value)!==Number(cfg.port)))){
+      return notify('Simpan koneksi Docker sebelum mendeteksi path Compose.','warning');
+    }
+    const panel=$('#docker-compose-candidates');
+    if(panel){panel.hidden=false;panel.textContent='Memeriksa metadata Docker Compose dan remote Git...'}
+    const found=await run('Mendeteksi path Compose',()=>
+      api('/api/docker/compose-paths?repo='+encodeURIComponent(repo)));
+    if(S.repo!==repo||S.page!=='docker')return;
+    if(found){S.composeCandidates=found;renderComposeCandidates()}
+    else if(panel)panel.textContent='Deteksi gagal. Periksa koneksi Docker atau SSH.';
+    return;
+  }
+  if(act==='use-compose'){
+    const item=S.composeCandidates?.repo===repo?
+      S.composeCandidates.candidates.find(p=>p.path===b.dataset.composePath):null;
+    if(!item?.verified)return notify('Path belum terverifikasi; periksa mount atau SSH dahulu.','warning');
+    $('#docker-deploy-path').value=item.path;
+    const label=$('#deploy-ready-label'),detail=$('#deploy-ready-detail');
+    if(label)label.textContent='Path belum disimpan';
+    if(detail)detail.textContent='Path '+item.path+' dipilih. Klik Simpan aplikasi sebelum deploy.';
+    S.deployReadiness=null;
+    notify('Path Compose dimasukkan. Klik Simpan aplikasi untuk menerapkan.','info','Path terdeteksi');
+    return;
+  }
   if(act==='save-connection'){
     const data={mode:$('#docker-mode').value,host:$('#docker-host').value.trim(),
       username:$('#docker-user').value.trim(),port:Number($('#docker-port').value||22)};
     const r=await run('Menyimpan koneksi',()=>api('/api/docker/settings','POST',data));
-    if(r){S.dockerCfg={...S.dockerCfg,...r};drawDocker();note('Koneksi disimpan. Jalankan tes koneksi.')}
+    if(r){S.dockerCfg={...S.dockerCfg,...r};S.composeCandidates=null;drawDocker();note('Koneksi disimpan. Jalankan tes koneksi.')}
     return;
   }
   if(act==='test'){
