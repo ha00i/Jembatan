@@ -873,7 +873,12 @@ async function refreshBranches(repo){
     if(S.repo!==repo||S.branchRequestId!==requestId)return;
     S.branchError=e.message;S.branchData=null;
   }finally{
-    if(S.repo===repo&&S.branchRequestId===requestId){S.branchLoading=false;drawBranchPanel()}
+    if(S.repo===repo&&S.branchRequestId===requestId){
+      S.branchLoading=false;
+      drawBranchPanel();
+      const count=$('[data-act="workspace-branches"] .switch-count');
+      if(count)count.textContent=String(S.branchData?.branches?.length??'…');
+    }
   }
 }
 function openBranchDelete(repo, name){
