@@ -75,6 +75,14 @@ class DashboardNestedScrollContract(unittest.TestCase):
         self.assertIn('data-act="open-docker">Pengaturan Docker &amp; QA', HTML)
         self.assertIn("if(act==='back-to-issues')return setPage('repos')", HTML)
 
+    def test_docker_failure_or_loading_keeps_a_return_navigation(self):
+        self.assertIn('class="docker-loading"', HTML)
+        self.assertIn('Memuat pengaturan Docker & QA...', HTML)
+        self.assertIn('Pengaturan Docker gagal dimuat. Periksa notifikasi di atas', HTML)
+        self.assertIn('data-docker="reload">Coba lagi', HTML)
+        self.assertIn("if(!cfg){", HTML)
+        self.assertIn("if(act==='back-to-issues')return setPage('repos')", HTML)
+
     def test_short_desktop_defaults_to_expanded_issue_list(self):
         self.assertIn("S.listFocus=Boolean(document.documentElement?.clientWidth>=761", HTML)
         self.assertIn("document.documentElement?.clientHeight<760", HTML)
