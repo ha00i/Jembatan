@@ -394,7 +394,9 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
 @media(max-width:540px){.prompt-part-actions button{flex:1 1 100%}}
 .issue-pagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin:16px 0;font-size:13px;color:var(--muted)}
 .issue-pagination .row{gap:8px}
-.issue-full-detail{border:1px solid var(--line);padding:16px;border-radius:11px;background:#f9fbff;min-width:0}
+.issue-full-detail{border:1px solid var(--line);padding:16px;border-radius:11px;background:#f9fbff;min-width:0;max-height:min(65dvh,640px);overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;overscroll-behavior-y:auto;-webkit-overflow-scrolling:touch}
+.issue-full-detail:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+@media(max-width:760px){.issue-full-detail{max-height:min(55dvh,440px);padding:12px;scrollbar-gutter:auto}}
 .issue-full-detail[hidden]{display:none}
 .issue-full-detail h4{margin:8px 0;font-size:14px;color:var(--ink)}
 .issue-full-body,.issue-comment pre{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:none;overflow:visible;font-size:12px;line-height:1.65;margin:8px 0;padding:12px;background:var(--surface);color:var(--ink)}
@@ -667,7 +669,7 @@ function row(i){
    <div class="body"><div class="flow-hint"><span>Prompt lengkap</span><span>Terapkan patch</span><span>PR &amp; merge</span><span>QA manual terakhir</span></div>
     <p><a href="${esc(i.url)}" target="_blank" rel="noopener">Buka issue di GitHub</a></p>
     <div class="issue-detail-actions"><button data-act="issue-read" type="button">Baca deskripsi lengkap dan komentar</button></div>
-    <div class="issue-full-detail" data-issue-content hidden></div>
+    <div class="issue-full-detail" data-issue-content role="region" aria-label="Isi lengkap issue dan komentar, gulir di dalam panel" tabindex="0" hidden></div>
     ${i.branches.length?`<ul>${i.branches.map(b=>`<li><code>${esc(b.name)}</code>: ${b.ahead} commit di depan, ${b.behind} tertinggal${b.merged?', sudah masuk':''} (${esc(b.date)})</li>`).join('')}</ul>`:'<p class="mute">Belum ada branch atau commit yang menyebut issue ini.</p>'}
     <p class="context-note">PR harus ditinjau sebelum merge. QA dijalankan manual setelah merge.</p>
     <div class="row"><select data-br aria-label="Branch konteks prompt"><option value="">Branch default (konteks prompt)</option>${opts}</select><input data-files placeholder="File konteks lengkap, pisahkan koma"></div>
