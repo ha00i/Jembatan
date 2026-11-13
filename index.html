@@ -1491,7 +1491,8 @@ function renderComposeCandidates(){
     (item.verified?
       '<button type="button" data-docker="use-compose" data-compose-path="'+
       esc(item.path)+'">Pakai path</button>':
-      '<span class="compose-candidate-pending">Periksa mount/SSH</span>')+
+      '<button type="button" data-docker="copy-compose" data-compose-path="'+
+      esc(item.path)+'" title="Salin path yang belum terverifikasi">Salin path</button>')+
     '</div>').join('');
   const warnings=(data.warnings||[]).map(msg=>
     '<p class="docker-caption">'+esc(msg)+'</p>').join('');
@@ -1562,6 +1563,19 @@ $('#docker-view').onclick=async e=>{
     if(S.repo!==repo||S.page!=='docker')return;
     if(found){S.composeCandidates=found;renderComposeCandidates()}
     else if(panel)panel.textContent='Deteksi gagal. Periksa koneksi Docker atau SSH.';
+    return;
+  }
+  if(act==='copy-compose'){
+    const item=S.composeCandidates?.repo===repo?
+      S.composeCandidates.candidates.find(p=>p.path===b.dataset.composePath):null;
+    if(!item)return notify('Kandidat path tidak ditemukan. Ulangi deteksi.','warning');
+    const field=document.createElement('textarea');
+    field.value=item.path;field.style.position='fixed';field.style.left='-9999px';
+    document.body.appendChild(field);
+    const copied=await copy(field);
+    field.remove();
+    notify(copied?'Path tersalin; periksa mount/SSH sebelum digunakan.':
+      'Salin manual teks path dari daftar.','info','Path Compose');
     return;
   }
   if(act==='use-compose'){
