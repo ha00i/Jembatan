@@ -377,6 +377,13 @@ input:focus,select:focus,textarea:focus{border-color:#4289F7}
 .workflow-manual textarea,.workflow-manual [data-qa-report] textarea{width:100%;min-height:114px}
 .workflow-next a{overflow-wrap:anywhere}
 @media(max-width:540px){.workflow-next button,.workflow-manual button{width:100%}}
+
+.docker-qa-follow{border:1px solid #b9d4ec;border-radius:12px;padding:16px;margin-top:17px;background:#f6faff;display:grid;gap:10px}
+.docker-qa-follow[hidden],.docker-qa-follow [hidden]{display:none}
+.docker-qa-follow textarea{min-height:145px;width:100%;font:12px/1.5 ui-monospace,monospace}
+.docker-qa-follow button{justify-self:start;min-height:43px}
+.docker-qa-follow a{overflow-wrap:anywhere}
+@media(max-width:540px){.docker-qa-follow button{width:100%}}
 </style>
 </head>
 <body>
@@ -826,6 +833,20 @@ function renderDockerActivity(){
     if(previous!==current){log.textContent=current;if(atBottom)log.scrollTop=log.scrollHeight}
   }
   if(copy)copy.hidden=!(result||liveText);
+  const panel=$('#docker-qa-follow'),job=S.qaLive;
+  if(panel){
+    panel.hidden=!(job?.followup_prompt||job?.report_error);
+    const link=$('#docker-qa-issue-link');
+    if(link){link.hidden=!job?.report_issue_url;link.href=job?.report_issue_url||'#';link.textContent=job?.report_issue_url?'Issue QA #'+job.issue_number:''}
+    const message=$('#docker-qa-report-note');
+    if(message)message.textContent=job?.report_error?
+      'Pelaporan issue gagal: '+job.report_error+' — tempel log di issue secara manual.':
+      'QA gagal dicatat di GitHub. Salin prompt dan lanjutkan perbaikan sampai selesai.';
+    const field=$('#docker-qa-follow-prompt');
+    if(field)field.value=job?.followup_prompt||'';
+    const button=$('#docker-qa-copy-prompt');
+    if(button)button.disabled=!job?.followup_prompt;
+  }
 }
 function startDockerOperation(kind,repo){
   if(S.dockerOperation)return false;
@@ -1005,6 +1026,10 @@ async function refreshDeployReadiness(repo){
 function drawDocker(){
   const cfg=S.dockerCfg||{},app=cfg.app||{},ssh=cfg.mode==='ssh',repo=S.repo;
   const profiles=(cfg.profiles||[]).map(p=>'<option value="'+esc(p.id)+'"'+(p.id===app.qa_profile?' selected':'')+'>'+esc(p.label)+'</option>').join('');
+  const issues=S.data?.repo===repo?(S.data.issues||[]):[];
+  const issueOptions=issues.map(i=>'<option value="'+Number(i.number)+'"'+
+    (Number(S.qaIssueNumber)===Number(i.number)?' selected':'')+'>#'+Number(i.number)+' · '+
+    esc(i.title)+(i.state==='closed'?' (closed)':'')+'</option>').join('');
   const disabled=repo&&!S.dockerOperation?'':' disabled';
   const blocked=S.dockerOperation?' disabled':'';
   const html=[
@@ -1023,6 +1048,9 @@ function drawDocker(){
    '<div id="docker-connection-result" class="docker-caption" role="status"></div></div>',
    '<div class="docker-panel"><h3>2. Aplikasi & QA</h3>',
    '<p>'+(repo?'Repository: <strong>'+esc(repo)+'</strong>':'Pilih repository di sidebar kiri dulu.')+'</p>',
+   '<label for="docker-qa-issue">Issue terkait bila QA gagal</label>',
+   '<select id="docker-qa-issue"><option value="">Otomatis buat/pakai ulang satu issue QA</option>'+issueOptions+'</select>',
+   '<p class="docker-caption">Jika QA gagal, Jembatan melaporkan log ke GitHub, membuka ulang issue terkait bila sudah closed, dan menyiapkan prompt perbaikan.</p>',
    '<label for="docker-qa-container">Container khusus QA</label>',
    '<input id="docker-qa-container" placeholder="vortex-qa-qa-app-1" value="'+esc(app.qa_container||'')+'"'+disabled+'>',
    '<label for="docker-qa-profile">Jenis tes</label><select id="docker-qa-profile"'+disabled+'>',
@@ -1048,7 +1076,11 @@ function drawDocker(){
    '<div class="docker-panel docker-wide"><div class="docker-section-heading"><h3>3. Container & hasil</h3><button type="button" id="docker-copy-result" data-docker="copy-result" hidden>Salin hasil</button></div>',
    '<p>Daftar container aktif dan hasil operasi yang kamu jalankan.</p>',
    '<div id="docker-container-list" class="docker-containers"><span class="mute">Klik Lihat container.</span></div>',
-   '<pre id="docker-output" class="docker-out" hidden aria-live="off" aria-label="Verbose log Docker QA"></pre></div>',
+   '<pre id="docker-output" class="docker-out" hidden aria-live="off" aria-label="Verbose log Docker QA"></pre>',
+   '<div class="docker-qa-follow" id="docker-qa-follow" hidden><a id="docker-qa-issue-link" target="_blank" rel="noopener" href="#" hidden>Issue QA</a>',
+   '<p id="docker-qa-report-note" class="docker-caption" role="status"></p>',
+   '<textarea id="docker-qa-follow-prompt" rows="9" readonly aria-label="Prompt tindak lanjut QA lengkap"></textarea>',
+   '<button type="button" id="docker-qa-copy-prompt" data-docker="copy-qa-prompt">Salin prompt lengkap untuk ChatGPT</button></div></div>',
    '</div>'
   ].join('');
   $('#docker-view').innerHTML=html;
@@ -1086,6 +1118,12 @@ $('#docker-view').onclick=async e=>{
   const b=e.target.closest('[data-docker]');
   if(!b)return;
   const act=b.dataset.docker,repo=S.repo;
+  if(act==='copy-qa-prompt'){
+    const value=$('#docker-qa-follow-prompt').value;
+    if(value){try{await navigator.clipboard.writeText(value);notify('Prompt perbaikan lengkap disalin.','success')}
+      catch(_){notify('Clipboard gagal; salin isi kotak prompt secara manual.','warning')}}
+    return;
+  }
   if(act==='copy-result'){
     const value=S.dockerResult?.output||S.qaLive?.log||'';
     if(!value)return;
@@ -1152,7 +1190,10 @@ $('#docker-view').onclick=async e=>{
     if(!confirm('Jalankan QA pada '+(qaMode==='default'?'branch default GitHub':'branch aktif checkout QA')+
       '? Pastikan container QA dan data pengujiannya terpisah dari production.'))return;
     startDockerOperation('qa',repo);
-    const r=await run('Menyiapkan QA verbose',()=>api('/api/docker/qa/start','POST',{repo}));
+    const issueValue=$('#docker-qa-issue').value;
+    const issue=issueValue?Number(issueValue):null;
+    const r=await run('Menyiapkan QA verbose',()=>api('/api/docker/qa/start','POST',
+      {repo,issue,report_on_fail:true}));
     if(!r){
       finishDockerOperation(false,'QA gagal dimulai','Permintaan ditolak. Periksa koneksi Docker dan pengaturan container QA.','[Jembatan] QA tidak berhasil dimulai; tidak ada tes yang dijalankan oleh permintaan ini.');
       return;
