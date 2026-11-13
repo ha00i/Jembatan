@@ -19,7 +19,8 @@ class FakeApp:
 
 def mapping(app, repo):
     return {"repo": repo, "qa_container": "vortex-qa-qa-app-1",
-            "qa_profile": "python", "deploy_path": ""}
+            "qa_profile": "python", "qa_branch_mode": "active",
+            "deploy_branch": "staging", "deploy_path": ""}
 
 
 class QAJobTests(unittest.TestCase):
@@ -41,7 +42,7 @@ class QAJobTests(unittest.TestCase):
         ready = threading.Event()
         release = threading.Event()
 
-        def fake_run(app, repo, on_event):
+        def fake_run(app, repo, on_event, **kwargs):
             on_event("stage", "Menjalankan Python")
             on_event("output", "test_login ... ok\\n")
             ready.set()
@@ -66,7 +67,7 @@ class QAJobTests(unittest.TestCase):
 
     def test_second_job_blocked_while_first_runs(self):
         ready, release = threading.Event(), threading.Event()
-        def fake_run(app, repo, on_event):
+        def fake_run(app, repo, on_event, **kwargs):
             ready.set()
             self.assertTrue(release.wait(2))
             return {"ok": True, "output": ""}
@@ -133,7 +134,8 @@ class QAJobTests(unittest.TestCase):
         with patch.object(qa.docker_control, "_app_settings", side_effect=mapping):
             with patch.object(qa.docker_control, "run_qa", return_value={
                 "ok": True, "source_verified": True, "source_sha": sha,
-                "source_reason": "Git clean and HEAD matched", "output": "OK"
+                "source_reason": "Git clean and HEAD matched",
+                "source_branch": "main", "output": "OK"
             }):
                 qa.start(self.app, "ha00i/Jembatan")
                 result = self.wait_done()
@@ -146,14 +148,16 @@ class QAJobTests(unittest.TestCase):
         self.app.gh = lambda path: {"commit": {"sha": sha}}
         with patch.object(qa.docker_control, "_app_settings", side_effect=mapping):
             with patch.object(qa.docker_control, "run_qa", return_value={
-                "ok": True, "source_verified": True, "source_sha": sha
+                "ok": True, "source_verified": True, "source_sha": sha,
+                "source_branch": "main"
             }):
                 qa.start(self.app, "ha00i/Jembatan")
                 self.wait_done()
                 with self.assertRaisesRegex(qa.docker_control.DockerError, "Deploy diblokir"):
                     qa.require_verified(self.app, "ha00i/Jembatan", "main", "b" * 40)
-                with self.assertRaises(qa.docker_control.DockerError):
-                    qa.require_verified(self.app, "ha00i/Jembatan", "staging", sha)
+                # QA main can release staging if the tested commit SHA is identical.
+                proof = qa.require_verified(self.app, "ha00i/Jembatan", "staging", sha)
+                self.assertEqual(proof["qa_branch"], "main")
 
     def test_passed_test_with_unverified_container_does_not_grant_deploy(self):
         sha = "a" * 40
@@ -161,7 +165,8 @@ class QAJobTests(unittest.TestCase):
         with patch.object(qa.docker_control, "_app_settings", side_effect=mapping):
             with patch.object(qa.docker_control, "run_qa", return_value={
                 "ok": True, "source_verified": False, "source_sha": None,
-                "source_reason": "Git not installed", "output": "OK"
+                "source_reason": "Git not installed",
+                "source_branch": "main", "output": "OK"
             }):
                 qa.start(self.app, "ha00i/Jembatan")
                 result = self.wait_done()
@@ -169,6 +174,54 @@ class QAJobTests(unittest.TestCase):
                 self.assertFalse(result["qa_verified"])
                 with self.assertRaisesRegex(qa.docker_control.DockerError, "Git not installed"):
                     qa.require_verified(self.app, "ha00i/Jembatan", "main", sha)
+
+    def test_default_mode_uses_github_default_branch_not_deploy_branch(self):
+        sha = "b" * 40
+        observed = []
+        self.app.gh = lambda path: (
+            {"default_branch": "develop"} if path == "/repos/ha00i/Jembatan"
+            else {"commit": {"sha": sha}}
+        )
+        def with_default(app, repo):
+            result = mapping(app, repo)
+            result["qa_branch_mode"] = "default"
+            result["deploy_branch"] = "release/v2"
+            return result
+        def fake_run(app, repo, on_event, **kwargs):
+            observed.append(kwargs)
+            return {"ok": True, "source_branch": "develop",
+                    "source_sha": sha, "source_verified": True}
+        with patch.object(qa.docker_control, "_app_settings", side_effect=with_default):
+            with patch.object(qa.docker_control, "run_qa", side_effect=fake_run):
+                qa.start(self.app, "ha00i/Jembatan")
+                result = self.wait_done()
+                self.assertTrue(result["qa_verified"])
+                self.assertEqual(result["qa_branch"], "develop")
+                with self.assertRaises(qa.docker_control.DockerError):
+                    qa.require_verified(self.app, "ha00i/Jembatan", "release/v2", "a" * 40)
+                proof = qa.require_verified(self.app, "ha00i/Jembatan", "release/v2", sha)
+        self.assertEqual(proof["qa_branch"], "develop")
+        self.assertEqual(observed[0]["branch_mode"], "default")
+        self.assertEqual(observed[0]["required_branch"], "develop")
+
+    def test_active_mode_uses_checkout_branch_not_deploy_config(self):
+        sha = "c" * 40
+        urls = []
+        def fake_gh(url):
+            urls.append(url)
+            return {"commit": {"sha": sha}}
+        self.app.gh = fake_gh
+        with patch.object(qa.docker_control, "_app_settings", side_effect=mapping):
+            with patch.object(qa.docker_control, "run_qa",
+                              return_value={"ok": True, "source_branch": "feature/login",
+                                            "source_sha": sha, "source_verified": True}) as run:
+                qa.start(self.app, "ha00i/Jembatan")
+                result = self.wait_done()
+        self.assertTrue(result["qa_verified"])
+        self.assertEqual(result["qa_branch"], "feature/login")
+        self.assertTrue(any("/branches/feature%2Flogin" in url for url in urls))
+        self.assertEqual(run.call_args.kwargs["branch_mode"], "active")
+        self.assertIsNone(run.call_args.kwargs["required_branch"])
 
     def test_stdout_callback_receives_chunks_from_real_subprocess(self):
         chunks = []
