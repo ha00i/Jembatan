@@ -396,7 +396,10 @@ def merge_issue_pr(r, issue_number, pr_number, base, expected_sha):
     if pr.get("mergeable") is False:
         raise Err("PR memiliki konflik dan belum dapat di-merge", 409)
     result = gh(f"/repos/{r}/pulls/{pr_number}/merge", "PUT", {
-        "sha": expected_sha, "merge_method": "squash",
+        # A merge commit keeps bridge/issue-N as an ancestor of the target.
+        # This permits a later QA-failure fix on the SAME stable branch without
+        # a force-push after the previous PR is merged.
+        "sha": expected_sha, "merge_method": "merge",
         "commit_title": f"Kerjakan #{n} — merge ke {base}"})
     if result.get("merged") is not True:
         raise Err("GitHub tidak mengonfirmasi merge; periksa PR langsung", 502)
