@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Jembatan: ChatGPT <-> GitHub. Hanya library standar Python. Lihat README.md."""
-import base64, hmac, json, os, re, shlex, subprocess, sys, tempfile, threading, time
+import base64, hashlib, hmac, json, os, re, shlex, subprocess, sys, tempfile, threading, time
 import branch_manager
 import docker_control
 import qa_jobs
@@ -399,6 +399,88 @@ def merge_issue_pr(r, issue_number, pr_number, base, expected_sha):
             "qa_required": True, "next": "Jalankan QA secara manual; issue belum dianggap selesai."}
 
 
+# ---------- QA manual / automated failure feedback to one GitHub issue ----------
+QA_TRACKER = "<!-- jembatan:qa-tracker -->"
+
+
+def qa_followup_prompt(r, issue, log):
+    title = issue.get("title") or "Kegagalan QA"
+    body = issue.get("body") or "(kosong)"
+    payload = [
+        "SELESAIKAN SEMUA masalah, jangan kirim solusi sebagian.",
+        f"Repository: {r}. Issue #{issue['number']}: {title}",
+        "Tindaklanjuti keseluruhan issue dan error QA berikut sampai selesai.",
+        "Jangan menyatakan PASS atau mengarang hasil uji yang tidak dijalankan.",
+        "Jika butuh source tambahan: hanya balas BUTUH FILE: path1, path2.",
+        "", "## Isi issue lengkap", body,
+        "", "## Log QA (disanitasi; bagian terakhir bila log panjang)",
+        "~~~~text", log, "~~~~", "", FORMAT,
+    ]
+    prompt = "\n".join(payload)
+    if len(prompt) > MAX_PROMPT_CHARS:
+        raise Err("Prompt tindak lanjut QA terlalu besar; pecah laporan issue.", 409)
+    return prompt
+
+
+def report_qa_failure(r, issue_number=None, log="", branch=None):
+    """Idempotent tracker-or-linked-issue reporting; invoked only after user QA."""
+    repo_dir(r)
+    if not isinstance(log, str) or not log.strip():
+        raise Err("Log QA gagal wajib diisi sebelum membuat laporan", 409)
+    if len(log) > 65536:
+        raise Err("Log QA terlalu panjang (>64 KB); kirim cuplikan yang relevan.", 409)
+    if branch and not docker_control.valid_branch(branch):
+        raise Err("Branch konteks QA tidak valid", 409)
+    safe_log = qa_jobs._sanitize(log.strip(), sys.modules[__name__])
+    clipped = len(safe_log) > 18000
+    shown_log = safe_log[-18000:] if clipped else safe_log
+    if clipped:
+        shown_log = "[Jembatan] Log panjang: 18.000 karakter terakhir disertakan.\n" + shown_log
+    digest = hashlib.sha256((r + "\n" + safe_log).encode("utf-8")).hexdigest()[:20]
+    fingerprint = f"<!-- jembatan:qa-failure:{digest} -->"
+    issue = None
+    if issue_number not in (None, ""):
+        try:
+            number = int(issue_number)
+        except (TypeError, ValueError) as exc:
+            raise Err("Nomor issue QA tidak valid", 409) from exc
+        if number < 1:
+            raise Err("Nomor issue QA harus positif", 409)
+        issue = gh(f"/repos/{r}/issues/{number}")
+        if issue.get("pull_request"):
+            raise Err("Nomor tersebut adalah PR, bukan issue QA", 409)
+    else:
+        candidates = gh_pages(f"/repos/{r}/issues?state=all&sort=updated", 5)
+        issue = next((i for i in candidates if not i.get("pull_request") and
+                      QA_TRACKER in (i.get("body") or "")), None)
+    detail = (f"QA gagal untuk {r}" +
+              (f" (branch {branch})" if branch else "") +
+              f".\n\n{fingerprint}\n\n~~~~text\n{shown_log}\n~~~~")
+    created = False
+    reopened = False
+    if issue is None:
+        issue = gh(f"/repos/{r}/issues", "POST", {
+            "title": f"QA gagal — {r}",
+            "body": QA_TRACKER + "\n\n" + detail +
+                    "\n\nIssue ini dipakai ulang untuk hasil QA berikutnya.",
+        })
+        created = True
+    elif issue.get("state") == "closed":
+        issue = gh(f"/repos/{r}/issues/{issue['number']}", "PATCH", {"state": "open"})
+        reopened = True
+    if not created:
+        # Avoid repeated comments for an unchanged failure on a rerun.
+        comments = gh_pages(f"/repos/{r}/issues/{issue['number']}/comments", 5)
+        if not any(fingerprint in (c.get("body") or "") for c in comments):
+            gh(f"/repos/{r}/issues/{issue['number']}/comments", "POST", {
+                "body": "QA manual/terakhir masih gagal:\n\n" + detail})
+    prompt = qa_followup_prompt(r, issue, shown_log)
+    return {"issue": issue["number"], "url": issue.get("html_url", ""),
+            "created": created, "reopened": reopened,
+            "prompt": prompt, "chars": len(prompt),
+            "message": "Issue QA dibuat/dibuka ulang; salin prompt lengkap untuk ChatGPT."}
+
+
 # ---------- Docker: explicit mapping, fixed QA commands, operator-approved deploy ----------
 def docker_action(func, *args):
     try:
@@ -517,6 +599,8 @@ ROUTES = {
     ("POST", "/api/push"): lambda q, b: push(b["repo"], b["branch"], int(b["issue"]), b.get("target")),
     ("POST", "/api/pr/merge"): lambda q, b: merge_issue_pr(
         b["repo"], b["issue"], b["pr_number"], b["base"], b["head_sha"]),
+    ("POST", "/api/qa/failure"): lambda q, b: report_qa_failure(
+        b["repo"], b.get("issue"), b["log"], b.get("branch")),
     ("GET", "/api/docker/settings"): lambda q, b: docker_action(
         docker_control.public_settings, q.get("repo")),
     ("POST", "/api/docker/settings"): lambda q, b: docker_action(
