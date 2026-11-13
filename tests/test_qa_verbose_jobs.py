@@ -223,6 +223,49 @@ class QAJobTests(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["branch_mode"], "active")
         self.assertIsNone(run.call_args.kwargs["required_branch"])
 
+    def test_failed_manual_qa_reopens_associated_issue_automatically(self):
+        from unittest.mock import Mock
+        self.app.gh = lambda path: (
+            {"number": 19, "state": "closed"} if "/issues/19" in path
+            else {"commit": {"sha": "a" * 40}}
+        )
+        self.app.report_qa_failure = Mock(return_value={
+            "issue": 19, "url": "https://example/issues/19",
+            "prompt": "STATUS: SELESAI — lanjutkan perbaikan"
+        })
+        with patch.object(qa.docker_control, "_app_settings", side_effect=mapping):
+            with patch.object(qa.docker_control, "run_qa", return_value={
+                "ok": False, "source_branch": "main", "source_sha": "a" * 40,
+                "source_verified": True, "output": "FAIL test_api"
+            }):
+                qa.start(self.app, "ha00i/Jembatan",
+                         issue_number=19, report_on_fail=True)
+                result = self.wait_done()
+        self.assertEqual(result["state"], "failed")
+        self.assertEqual(result["issue_number"], 19)
+        self.assertIn("issues/19", result["report_issue_url"])
+        self.assertIn("STATUS: SELESAI", result["followup_prompt"])
+        self.app.report_qa_failure.assert_called_once()
+
+    def test_successful_manual_qa_never_creates_issue(self):
+        from unittest.mock import Mock
+        self.app.report_qa_failure = Mock()
+        with patch.object(qa.docker_control, "_app_settings", side_effect=mapping):
+            with patch.object(qa.docker_control, "run_qa",
+                              return_value={"ok": True, "output": "PASS"}):
+                qa.start(self.app, "ha00i/Jembatan", report_on_fail=True)
+                result = self.wait_done()
+        self.assertEqual(result["state"], "passed")
+        self.app.report_qa_failure.assert_not_called()
+
+    def test_issue_tracking_option_validates_issue_reference(self):
+        self.app.gh = lambda url: {"number": 19, "pull_request": {"url": "pr"}}
+        with patch.object(qa.docker_control, "_app_settings", side_effect=mapping):
+            with self.assertRaisesRegex(qa.docker_control.DockerError, "mengarah ke PR"):
+                qa.start(self.app, "ha00i/Jembatan", issue_number=19,
+                         report_on_fail=True)
+        self.assertFalse(qa.active())
+
     def test_stdout_callback_receives_chunks_from_real_subprocess(self):
         chunks = []
         out = qa.docker_control._command([
